@@ -11,18 +11,22 @@ interface VidiqDailyStat {
 
 /**
  * Tương tác với API VidIQ để lấy thống kê nâng cao
+ * Logic dựa trên code Python cũ của người dùng
  */
 export async function getVidiqStats(channelId: string) {
-  if (!VIDIQ_BEARER_TOKEN || !VIDIQ_CLIENT_ID) {
-    throw new Error("Thiếu cấu hình VIDIQ_BEARER_TOKEN hoặc VIDIQ_CLIENT_ID trong .env");
+  if (!VIDIQ_BEARER_TOKEN) {
+    throw new Error("Thiếu cấu hình VIDIQ_BEARER_TOKEN trong .env");
   }
 
   const url = `https://api.vidiq.com/youtube/channels/public/channel-pages/${channelId}?days=365`;
   
   const response = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${VIDIQ_BEARER_TOKEN}`,
-      "x-vidiq-client": VIDIQ_CLIENT_ID,
+      "accept": "*/*",
+      "authorization": `Bearer ${VIDIQ_BEARER_TOKEN}`,
+      "content-type": "application/json",
+      "user-agent": "Mozilla/5.0",
+      "x-vidiq-client": VIDIQ_CLIENT_ID || "ext vch/3.168.0",
     },
   });
 
@@ -31,20 +35,25 @@ export async function getVidiqStats(channelId: string) {
   }
 
   const data = await response.json();
-
-  // Cấu trúc dữ liệu giả định dựa trên yêu cầu:
-  // views30Days = views realtime hôm nay + tổng views_change của 29 ngày trước
   const dailyData: VidiqDailyStat[] = data.daily_stats || [];
-  const realtimeViews = data.realtime_views || 0;
+  const currentTotalViews = data.current_stats?.views?.count || 0;
 
-  // Tính toán views30Days
-  const past29Days = dailyData.slice(0, 29);
-  const totalPastViewsChange = past29Days.reduce(
-    (sum, day) => sum + (day.views_change || 0),
-    0
-  );
-
-  const views30Days = realtimeViews + totalPastViewsChange;
+  let views30Days = 0;
+  if (dailyData.length >= 2) {
+    // Logic Python: views_today_realtime = current_total_views - yesterday_total_views
+    // daily_stats[0] là hôm nay (đang cập nhật), daily_stats[1] là hôm qua
+    const yesterdayTotalViews = dailyData[1]?.views || 0;
+    const viewsTodayRealtime = Math.max(0, currentTotalViews - yesterdayTotalViews);
+    
+    // views_past_29_days = sum(day.get("views_change", 0) for day in daily_stats[1:30])
+    const past29DaysStats = dailyData.slice(1, 30);
+    const viewsPast29Days = past29DaysStats.reduce(
+      (sum, day) => sum + (day.views_change || 0),
+      0
+    );
+    
+    views30Days = viewsTodayRealtime + viewsPast29Days;
+  }
 
   // Map lại dữ liệu để khớp với Prisma model DailyStat
   const dailyStats = dailyData.map((item) => ({
