@@ -5,6 +5,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
+const AVAILABLE_ICONS = [
+  "GitCompareArrows", "PieChart", "BarChart2", "TrendingUp", "Activity",
+  "Target", "Zap", "Star", "Heart", "Briefcase",
+  "Globe", "Layers", "Box", "Cpu", "Database",
+  "Folder", "Hash", "Monitor", "Smartphone", "Tv"
+];
+
 /**
  * Tạo một nhóm so sánh mới
  */
@@ -13,10 +20,12 @@ export async function createGroup(name: string) {
   if (!session?.user) throw new Error("Bạn cần đăng nhập để thực hiện thao tác này");
 
   const userId = (session.user as any).id;
+  const randomIcon = AVAILABLE_ICONS[Math.floor(Math.random() * AVAILABLE_ICONS.length)];
 
   const group = await prisma.compareGroup.create({
     data: {
       name,
+      icon: randomIcon,
       userId: userId,
     },
   });
@@ -121,5 +130,32 @@ export async function deleteGroup(groupId: string) {
   } catch (error: any) {
     console.error("Error in deleteGroup:", error);
     throw new Error("Không thể xóa nhóm");
+  }
+}
+
+/**
+ * Cập nhật thông tin nhóm (Tên hoặc Logo)
+ */
+export async function updateGroup(groupId: string, data: { name?: string; icon?: string }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const userId = (session.user as any).id;
+
+  try {
+    const updatedGroup = await prisma.compareGroup.update({
+      where: { 
+        id: groupId,
+        userId: userId
+      },
+      data: data
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath(`/group/${groupId}`);
+    return { success: true, group: updatedGroup };
+  } catch (error: any) {
+    console.error("Error in updateGroup:", error);
+    throw new Error("Không thể cập nhật nhóm");
   }
 }

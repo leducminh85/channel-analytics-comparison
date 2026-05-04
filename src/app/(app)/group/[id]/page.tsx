@@ -9,7 +9,7 @@ import MonthlyComparisonTable from "@/components/MonthlyComparisonTable";
 import MonthlyViewsChart from "@/components/MonthlyViewsChart";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import DeleteGroupButton from "@/components/DeleteGroupButton";
+import GroupActionMenu from "@/components/GroupActionMenu";
 
 export default async function GroupDetailPage({
   params,
@@ -57,11 +57,14 @@ export default async function GroupDetailPage({
             {channels.length} kênh đang được so sánh
           </p>
         </div>
-        <DeleteGroupButton 
-          groupId={id} 
-          groupName={group.name} 
-          redirectToDashboard={true} 
-        />
+        <div className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm rounded-xl px-2 py-1">
+          <GroupActionMenu 
+            groupId={id} 
+            groupName={group.name} 
+            currentIcon={group.icon}
+            redirectToDashboard={true} 
+          />
+        </div>
       </div>
 
       {/* Add Channel Section */}
@@ -76,8 +79,8 @@ export default async function GroupDetailPage({
       {/* Historical Monthly Data Section */}
       {channels.some((c: any) => c.monthlyStats.length > 0) && (
         <>
-          <MonthlyViewsChart channels={channels} />
           <MonthlyComparisonTable channels={channels} />
+          <MonthlyViewsChart channels={channels} />
         </>
       )}
     </div>

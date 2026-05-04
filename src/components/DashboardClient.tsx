@@ -5,11 +5,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { Plus, GitCompareArrows, ArrowRight, Video, Users } from "lucide-react";
 import CreateGroupModal from "@/components/CreateGroupModal";
-import DeleteGroupButton from "@/components/DeleteGroupButton";
+import GroupActionMenu from "@/components/GroupActionMenu";
+import * as LucideIcons from "lucide-react";
+import { ICON_COLORS } from "@/lib/iconMap";
 
 interface CompareGroup {
   id: string;
   name: string;
+  icon?: string | null;
   createdAt: Date | string;
   channels: {
     channel: {
@@ -104,53 +107,66 @@ export default function DashboardClient({
             {groups.map((group) => {
               const channelCount = group.channels?.length || 0;
               const logos = group.channels?.map(gc => gc.channel.logo_url).filter(Boolean) as string[];
+              
+              // Resolve dynamic icon
+              // @ts-ignore
+              const DynamicIcon = group.icon ? LucideIcons[group.icon] || GitCompareArrows : GitCompareArrows;
+
+              const gradientClass = group.icon && ICON_COLORS[group.icon] 
+                ? ICON_COLORS[group.icon] 
+                : "from-indigo-500 to-violet-500";
 
               return (
-                <Link
+                <div
                   key={group.id}
-                  href={`/group/${group.id}`}
                   className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5"
                 >
                   <div className="mb-4 flex items-start justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/20">
-                      <GitCompareArrows className="h-5 w-5 text-white" />
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradientClass} shadow-lg opacity-90 group-hover:opacity-100 transition-opacity`}>
+                      <DynamicIcon className="h-5 w-5 text-white" />
                     </div>
-                    <DeleteGroupButton groupId={group.id} groupName={group.name} />
+                    <GroupActionMenu 
+                      groupId={group.id} 
+                      groupName={group.name} 
+                      currentIcon={group.icon} 
+                    />
                   </div>
 
-                  <h3 className="text-base font-semibold text-slate-800 group-hover:text-indigo-600">
-                    {group.name}
-                  </h3>
+                  <Link href={`/group/${group.id}`} className="block">
+                    <h3 className="text-base font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                      {group.name}
+                    </h3>
 
-                  {/* Avatar Stack & Channel Count */}
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="flex -space-x-2 overflow-hidden">
-                        {logos.slice(0, 4).map((logo, i) => (
-                          <div 
-                            key={i} 
-                            className="inline-block h-7 w-7 rounded-full ring-2 ring-white overflow-hidden relative border border-slate-100"
-                          >
-                            <Image src={logo} alt="" fill className="object-cover" />
-                          </div>
-                        ))}
-                        {logos.length > 4 && (
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 ring-2 ring-white">
-                            +{logos.length - 4}
-                          </div>
-                        )}
+                    {/* Avatar Stack & Channel Count */}
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="flex -space-x-2 overflow-hidden">
+                          {logos.slice(0, 4).map((logo, i) => (
+                            <div 
+                              key={i} 
+                              className="inline-block h-7 w-7 rounded-full ring-2 ring-white overflow-hidden relative border border-slate-100"
+                            >
+                              <Image src={logo} alt="" fill className="object-cover" />
+                            </div>
+                          ))}
+                          {logos.length > 4 && (
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 ring-2 ring-white">
+                              +{logos.length - 4}
+                            </div>
+                          )}
+                        </div>
+                        <span className="ml-3 text-xs font-medium text-slate-500">
+                          {channelCount} kênh
+                        </span>
                       </div>
-                      <span className="ml-3 text-xs font-medium text-slate-500">
-                        {channelCount} kênh
-                      </span>
+                      
+                      <div className="flex items-center gap-1 text-xs font-medium text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">
+                        Xem chi tiết
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </div>
                     </div>
-                    
-                    <div className="flex items-center gap-1 text-xs font-medium text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">
-                      Xem chi tiết
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </div>
-                  </div>
-                </Link>
+                  </Link>
+                </div>
               );
             })}
           </div>
