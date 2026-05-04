@@ -20,7 +20,7 @@ export default async function DashboardLayout({
       <Suspense fallback={<div className="w-64 bg-sidebar-bg" />}>
         <Sidebar groups={groups} />
       </Suspense>
-      <main className="ml-64 flex-1 p-8">{children}</main>
+      <main className="ml-64 flex-1 p-8 min-w-0 overflow-hidden">{children}</main>
     </div>
   );
 }

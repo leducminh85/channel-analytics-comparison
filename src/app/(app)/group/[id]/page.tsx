@@ -41,7 +41,7 @@ export default async function GroupDetailPage({
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       {/* Header Section */}
       <div className="flex items-start justify-between">
         <div>
@@ -76,8 +76,8 @@ export default async function GroupDetailPage({
       {/* Historical Monthly Data Section */}
       {channels.some((c: any) => c.monthlyStats.length > 0) && (
         <>
-          <MonthlyComparisonTable channels={channels} />
           <MonthlyViewsChart channels={channels} />
+          <MonthlyComparisonTable channels={channels} />
         </>
       )}
     </div>
