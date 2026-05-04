@@ -78,12 +78,13 @@ model Channel {
   logo_url        String?
   subscriberCount Int            @default(0)
   videoCount      Int            @default(0)
-  viewCount       Int            @default(0)
+  viewCount       BigInt         @default(0)
   uploadFrequency String?
-  views30Days     Int            @default(0)
+  views30Days     BigInt         @default(0)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   dailyStats      DailyStat[]
+  monthlyStats    MonthlyStat[]
   groups          GroupChannel[]
 
   @@map("channels")
@@ -104,8 +105,8 @@ model DailyStat {
   id                 String   @id @default(cuid())
   channelId          String
   date_str           String
-  views              Int      @default(0)
-  views_change       Int      @default(0)
+  views              BigInt   @default(0)
+  views_change       BigInt   @default(0)
   subscribers        Int      @default(0)
   subscribers_change Int      @default(0)
   createdAt          DateTime @default(now())
@@ -113,4 +114,20 @@ model DailyStat {
 
   @@unique([channelId, date_str])
   @@map("daily_stats")
+}
+
+model MonthlyStat {
+  id                 String   @id @default(cuid())
+  channelId          String
+  month              String   // Format: YYYY-MM
+  views_gained       BigInt   @default(0)
+  total_views        BigInt   @default(0)
+  subscribers        Int      @default(0)
+  subscribers_change Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  channel            Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, month])
+  @@map("monthly_stats")
 }
