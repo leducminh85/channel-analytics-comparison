@@ -6,6 +6,7 @@ import AddChannelForm from "@/components/AddChannelForm";
 import CompareTable from "@/components/CompareTable";
 import ViewsChart from "@/components/ViewsChart";
 import MonthlyComparisonTable from "@/components/MonthlyComparisonTable";
+import MonthlyViewsChart from "@/components/MonthlyViewsChart";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -69,8 +70,13 @@ export default async function GroupDetailPage({
       </div>
 
       {/* Monthly Comparison Table */}
-      <div>
+      <div className="mb-6">
         <MonthlyComparisonTable channels={channelsWithStats} />
+      </div>
+
+      {/* Monthly Comparison Chart */}
+      <div>
+        <MonthlyViewsChart channels={channelsWithStats} />
       </div>
     </div>
   );
