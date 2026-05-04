@@ -74,3 +74,28 @@ export async function getGroupDetails(groupId: string) {
 
   return group;
 }
+
+/**
+ * Xóa một nhóm so sánh
+ */
+export async function deleteGroup(groupId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const userId = (session.user as any).id;
+
+  try {
+    await prisma.compareGroup.delete({
+      where: { 
+        id: groupId,
+        userId: userId
+      }
+    });
+
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in deleteGroup:", error);
+    throw new Error("Không thể xóa nhóm");
+  }
+}

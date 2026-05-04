@@ -1,7 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { Eye, Video, Users, TrendingUp, Clock, ExternalLink } from "lucide-react";
+import { Eye, Video, Users, TrendingUp, Clock, ExternalLink, Trash2 } from "lucide-react";
+import { removeChannelFromGroup } from "@/app/actions/channelActions";
+import { useState, useTransition } from "react";
+import ActionMenu from "./ActionMenu";
+import ConfirmModal from "./ConfirmModal";
 
 interface Channel {
   id: string;
@@ -23,7 +27,30 @@ function formatNumber(num: number): string {
   return num.toLocaleString("vi-VN");
 }
 
-export default function CompareTable({ channels }: { channels: Channel[] }) {
+export default function CompareTable({ 
+  channels, 
+  groupId 
+}: { 
+  channels: Channel[], 
+  groupId: string 
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [deletingChannel, setDeletingChannel] = useState<{id: string, title: string} | null>(null);
+
+  const handleConfirmDelete = () => {
+    if (!deletingChannel) return;
+    
+    startTransition(async () => {
+      try {
+        await removeChannelFromGroup(deletingChannel.id, groupId);
+        setDeletingChannel(null);
+      } catch (error: any) {
+        alert(error.message);
+        setDeletingChannel(null);
+      }
+    });
+  };
+
   if (channels.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-16">
@@ -41,8 +68,8 @@ export default function CompareTable({ channels }: { channels: Channel[] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-x-auto overflow-y-visible pb-32 -mb-32">
         <table className="compare-table w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/80">
@@ -74,10 +101,13 @@ export default function CompareTable({ channels }: { channels: Channel[] }) {
                   <Clock className="h-3.5 w-3.5" /> Chu kì đăng
                 </div>
               </th>
+              <th className="whitespace-nowrap px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Tác vụ
+              </th>
             </tr>
           </thead>
           <tbody>
-            {channels.map((channel, index) => (
+            {channels.map((channel) => (
               <tr
                 key={channel.id}
                 className="group border-b border-slate-50 transition-colors last:border-0 hover:bg-indigo-50/30"
@@ -141,11 +171,35 @@ export default function CompareTable({ channels }: { channels: Channel[] }) {
                 <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
                   {channel.uploadFrequency || "N/A"}
                 </td>
+
+                {/* Nút tác vụ */}
+                <td className="px-5 py-4 text-center relative overflow-visible">
+                  <ActionMenu
+                    items={[
+                      {
+                        label: "Xóa khỏi nhóm",
+                        icon: <Trash2 className="h-4 w-4" />,
+                        onClick: () => setDeletingChannel({ id: channel.id, title: channel.title }),
+                        variant: "destructive",
+                      },
+                    ]}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      <ConfirmModal
+        isOpen={!!deletingChannel}
+        onClose={() => setDeletingChannel(null)}
+        onConfirm={handleConfirmDelete}
+        isLoading={isPending}
+        title="Xóa kênh khỏi nhóm"
+        description={`Bạn có chắc chắn muốn xóa kênh "${deletingChannel?.title}" khỏi nhóm so sánh này?`}
+        confirmText="Xóa kênh"
+      />
     </div>
   );
 }

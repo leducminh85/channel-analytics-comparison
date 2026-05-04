@@ -9,6 +9,7 @@ import MonthlyComparisonTable from "@/components/MonthlyComparisonTable";
 import MonthlyViewsChart from "@/components/MonthlyViewsChart";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import DeleteGroupButton from "@/components/DeleteGroupButton";
 
 export default async function GroupDetailPage({
   params,
@@ -41,18 +42,25 @@ export default async function GroupDetailPage({
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
-        <Link
-          href="/dashboard"
-          className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-indigo-500"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Quay lại Dashboard
-        </Link>
-        <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {channels.length} kênh đang được so sánh
-        </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <Link
+            href="/dashboard"
+            className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-indigo-500"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Quay lại Dashboard
+          </Link>
+          <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {channels.length} kênh đang được so sánh
+          </p>
+        </div>
+        <DeleteGroupButton 
+          groupId={id} 
+          groupName={group.name} 
+          redirectToDashboard={true} 
+        />
       </div>
 
       {/* Add Channel Form */}
@@ -62,7 +70,7 @@ export default async function GroupDetailPage({
 
       {/* Compare Table */}
       <div className="mb-6">
-        <CompareTable channels={channels} />
+        <CompareTable channels={channels} groupId={id} />
       </div>
 
       <div className="mb-6">

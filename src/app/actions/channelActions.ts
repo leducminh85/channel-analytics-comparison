@@ -101,3 +101,25 @@ export async function addChannelToGroup(url: string, groupId: string) {
     throw new Error(error.message || "Đã xảy ra lỗi khi thêm kênh");
   }
 }
+
+/**
+ * Xóa một kênh khỏi nhóm
+ */
+export async function removeChannelFromGroup(channelId: string, groupId: string) {
+  try {
+    await prisma.groupChannel.delete({
+      where: {
+        groupId_channelId: {
+          groupId,
+          channelId,
+        },
+      },
+    });
+
+    revalidatePath(`/group/${groupId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in removeChannelFromGroup:", error);
+    throw new Error("Không thể xóa kênh khỏi nhóm");
+  }
+}
