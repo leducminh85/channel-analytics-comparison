@@ -46,6 +46,21 @@ function formatNumber(num: number): string {
   return num.toLocaleString("vi-VN");
 }
 
+function formatDate(dateStr: string): string {
+  try {
+    // Nếu là timestamp (số dưới dạng chuỗi)
+    const timestamp = Number(dateStr);
+    if (!isNaN(timestamp)) {
+      // Giả định timestamp từ VidIQ là giây, cần đổi sang ms
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+    }
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+}
+
 export default function ViewsChart({
   channels,
 }: {
@@ -73,7 +88,10 @@ export default function ViewsChart({
 
   // Build chart data: each entry has date + one key per channel
   const chartData = sortedDates.map((date) => {
-    const entry: Record<string, string | number> = { date };
+    const entry: Record<string, string | number> = { 
+      date,
+      formattedDate: formatDate(date)
+    };
     channels.forEach((ch) => {
       const stat = ch.dailyStats.find((s) => s.date_str === date);
       entry[ch.title] = stat?.views_change ?? 0;
@@ -86,7 +104,7 @@ export default function ViewsChart({
     if (!active || !payload) return null;
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-        <p className="mb-2 text-xs font-semibold text-slate-500">{label}</p>
+        <p className="mb-2 text-xs font-semibold text-slate-500">{formatDate(label)}</p>
         <div className="space-y-1.5">
           {payload.map((entry: any, index: number) => (
             <div key={index} className="flex items-center gap-2 text-xs">
@@ -123,7 +141,9 @@ export default function ViewsChart({
               tick={{ fontSize: 11, fill: "#94a3b8" }}
               tickLine={false}
               axisLine={{ stroke: "#e2e8f0" }}
+              tickFormatter={(val) => formatDate(val)}
               interval="preserveStartEnd"
+              minTickGap={30}
             />
             <YAxis
               tick={{ fontSize: 11, fill: "#94a3b8" }}

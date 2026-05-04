@@ -5,6 +5,7 @@ import { getGroupDetails } from "@/app/actions/groupActions";
 import AddChannelForm from "@/components/AddChannelForm";
 import CompareTable from "@/components/CompareTable";
 import ViewsChart from "@/components/ViewsChart";
+import MonthlyComparisonTable from "@/components/MonthlyComparisonTable";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -32,6 +33,7 @@ export default async function GroupDetailPage({
   const channelsWithStats = channels.map((ch) => ({
     id: ch.id,
     title: ch.title,
+    logo_url: ch.logo_url,
     dailyStats: ch.dailyStats,
   }));
 
@@ -62,9 +64,13 @@ export default async function GroupDetailPage({
         <CompareTable channels={channels} />
       </div>
 
-      {/* Views Chart */}
-      <div>
+      <div className="mb-6">
         <ViewsChart channels={channelsWithStats} />
+      </div>
+
+      {/* Monthly Comparison Table */}
+      <div>
+        <MonthlyComparisonTable channels={channelsWithStats} />
       </div>
     </div>
   );
