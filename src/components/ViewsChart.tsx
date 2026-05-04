@@ -94,7 +94,7 @@ export default function ViewsChart({
     };
     channels.forEach((ch) => {
       const stat = ch.dailyStats.find((s) => s.date_str === date);
-      entry[ch.title] = stat?.views_change ?? 0;
+      entry[ch.id] = stat?.views_change ?? 0;
     });
     return entry;
   });
@@ -162,7 +162,8 @@ export default function ViewsChart({
               <Line
                 key={ch.id}
                 type="monotone"
-                dataKey={ch.title}
+                dataKey={ch.id}
+                name={ch.title}
                 stroke={COLORS[index % COLORS.length]}
                 strokeWidth={2.5}
                 dot={false}

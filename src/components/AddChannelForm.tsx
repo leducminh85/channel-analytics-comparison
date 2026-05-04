@@ -63,7 +63,7 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
       {isPending && (
         <div className="mt-3 flex items-center gap-2 rounded-lg bg-indigo-50 px-4 py-2.5 text-xs text-indigo-700">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Đang lấy dữ liệu từ Youtube & VidIQ... Vui lòng đợi trong giây lát.
+          Đang lấy dữ liệu... Vui lòng đợi trong giây lát.
         </div>
       )}
 

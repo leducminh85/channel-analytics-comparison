@@ -61,7 +61,11 @@ export async function getGroupDetails(groupId: string) {
             include: {
               dailyStats: {
                 orderBy: { date_str: "desc" },
-                take: 30
+                take: 400
+              },
+              monthlyStats: {
+                orderBy: { month: "desc" },
+                take: 24
               }
             }
           }
@@ -72,7 +76,14 @@ export async function getGroupDetails(groupId: string) {
 
   if (!group) throw new Error("Không tìm thấy nhóm so sánh");
 
-  return group;
+  // Chuyển đổi BigInt sang Number để tránh lỗi serialization của Next.js Server Actions
+  const serializedGroup = JSON.parse(
+    JSON.stringify(group, (key, value) =>
+      typeof value === "bigint" ? Number(value) : value
+    )
+  );
+
+  return serializedGroup;
 }
 
 /**

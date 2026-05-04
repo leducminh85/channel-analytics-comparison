@@ -102,7 +102,7 @@ export default function CompareTable({
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Tác vụ
+                {/* Tác vụ */}
               </th>
             </tr>
           </thead>

@@ -65,7 +65,6 @@ export async function addChannelToGroup(url: string, groupId: string) {
     });
 
     // 5. Lưu mảng dailyStats vào bảng DailyStat
-    // Chúng ta lặp qua để upsert từng bản ghi theo cặp (channelId, date_str)
     for (const stat of vidiqData.dailyStats) {
       await prisma.dailyStat.upsert({
         where: {
@@ -91,11 +90,37 @@ export async function addChannelToGroup(url: string, groupId: string) {
       });
     }
 
-    // 6. Cập nhật lại cache UI
+    // 6. Lưu mảng monthlyStats vào bảng MonthlyStat
+    for (const mStat of vidiqData.monthlyStats) {
+      await prisma.monthlyStat.upsert({
+        where: {
+          channelId_month: {
+            channelId: channel.id,
+            month: mStat.month,
+          },
+        },
+        update: {
+          views_gained: mStat.views_gained,
+          total_views: mStat.total_views_at_end,
+          subscribers: mStat.subscribers,
+          subscribers_change: mStat.subscribers_change,
+        },
+        create: {
+          channelId: channel.id,
+          month: mStat.month,
+          views_gained: mStat.views_gained,
+          total_views: mStat.total_views_at_end,
+          subscribers: mStat.subscribers,
+          subscribers_change: mStat.subscribers_change,
+        },
+      });
+    }
+
+    // 7. Cập nhật lại cache UI
     revalidatePath("/dashboard");
     revalidatePath(`/group/${groupId}`);
 
-    return { success: true, channel };
+    return { success: true, channelId: channel.id };
   } catch (error: any) {
     console.error("Error in addChannelToGroup:", error);
     throw new Error(error.message || "Đã xảy ra lỗi khi thêm kênh");

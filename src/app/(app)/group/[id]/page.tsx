@@ -24,25 +24,26 @@ export default async function GroupDetailPage({
   let group;
   try {
     group = await getGroupDetails(id);
-  } catch {
+  } catch (error) {
+    console.error("Error fetching group details:", error);
     redirect("/dashboard");
   }
 
-  // Extract channels from the join table
-  const channels = group.channels.map((gc) => gc.channel);
+  if (!group) {
+    redirect("/dashboard");
+  }
 
-  // Prepare channels with dailyStats for the chart
-  const channelsWithStats = channels.map((ch) => ({
-    id: ch.id,
-    title: ch.title,
-    logo_url: ch.logo_url,
-    dailyStats: ch.dailyStats,
+  // Chuẩn bị dữ liệu kênh an toàn
+  const channels = (group.channels || []).map((gc: any) => ({
+    ...gc.channel,
+    dailyStats: gc.channel.dailyStats || [],
+    monthlyStats: gc.channel.monthlyStats || [],
   }));
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="flex items-start justify-between">
         <div>
           <Link
             href="/dashboard"
@@ -63,29 +64,22 @@ export default async function GroupDetailPage({
         />
       </div>
 
-      {/* Add Channel Form */}
-      <div className="mb-6">
-        <AddChannelForm groupId={id} />
-      </div>
+      {/* Add Channel Section */}
+      <AddChannelForm groupId={id} />
 
-      {/* Compare Table */}
-      <div className="mb-6">
-        <CompareTable channels={channels} groupId={id} />
-      </div>
+      {/* Overview Table */}
+      <CompareTable channels={channels} groupId={id} />
 
-      <div className="mb-6">
-        <ViewsChart channels={channelsWithStats} />
-      </div>
+      {/* 30-Day Views Chart */}
+      <ViewsChart channels={channels} />
 
-      {/* Monthly Comparison Table */}
-      <div className="mb-6">
-        <MonthlyComparisonTable channels={channelsWithStats} />
-      </div>
-
-      {/* Monthly Comparison Chart */}
-      <div>
-        <MonthlyViewsChart channels={channelsWithStats} />
-      </div>
+      {/* Historical Monthly Data Section */}
+      {channels.some((c: any) => c.monthlyStats.length > 0) && (
+        <>
+          <MonthlyComparisonTable channels={channels} />
+          <MonthlyViewsChart channels={channels} />
+        </>
+      )}
     </div>
   );
 }

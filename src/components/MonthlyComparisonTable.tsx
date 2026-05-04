@@ -3,35 +3,29 @@
 import Image from "next/image";
 import { Calendar } from "lucide-react";
 
-interface DailyStat {
-  date_str: string;
-  views_change: number;
+interface MonthlyStat {
+  month: string;
+  views_gained: number;
 }
 
 interface ChannelWithStats {
   id: string;
   title: string;
   logo_url: string | null;
-  dailyStats: DailyStat[];
+  monthlyStats: MonthlyStat[];
 }
 
 function formatNumber(num: number): string {
+  if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + "B";
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
   if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
   return num.toLocaleString("vi-VN");
 }
 
-function getMonthKey(dateStr: string): string {
-  try {
-    const timestamp = Number(dateStr);
-    if (!isNaN(timestamp)) {
-      const date = new Date(timestamp * 1000);
-      return `${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getFullYear()}`;
-    }
-    return "N/A";
-  } catch {
-    return "N/A";
-  }
+function formatMonthLabel(monthStr: string): string {
+  // input: YYYY-MM -> output: MM/YYYY
+  const [y, m] = monthStr.split("-");
+  return `${m}/${y}`;
 }
 
 export default function MonthlyComparisonTable({
@@ -41,44 +35,24 @@ export default function MonthlyComparisonTable({
 }) {
   if (channels.length === 0) return null;
 
-  // Group views by month and channel
-  // Structure: { "MM/YYYY": { channelId: { gained: number, total: number } } }
-  const monthlyData: Record<string, Record<string, { gained: number, total: number }>> = {};
+  // Map: { "YYYY-MM": { channelId: gained } }
+  const monthlyData: Record<string, Record<string, number>> = {};
   const allMonthsSet = new Set<string>();
 
   channels.forEach((channel) => {
-    // Sort daily stats ascending to get the total view at the end of the month correctly
-    const sortedStats = [...channel.dailyStats].sort((a, b) => Number(a.date_str) - Number(b.date_str));
-    
-    sortedStats.forEach((stat) => {
-      const monthKey = getMonthKey(stat.date_str);
-      if (monthKey === "N/A") return;
-
+    (channel.monthlyStats || []).forEach((stat) => {
+      const monthKey = stat.month;
       allMonthsSet.add(monthKey);
       
       if (!monthlyData[monthKey]) {
         monthlyData[monthKey] = {};
       }
-      
-      if (!monthlyData[monthKey][channel.id]) {
-        monthlyData[monthKey][channel.id] = { gained: 0, total: 0 };
-      }
-      
-      const viewsChange = stat.views_change || 0;
-      if (viewsChange > 0) {
-        monthlyData[monthKey][channel.id].gained += viewsChange;
-      }
-      // Total views at the end of the month is just the last entry's views
-      monthlyData[monthKey][channel.id].total = stat.views;
+      monthlyData[monthKey][channel.id] = stat.views_gained;
     });
   });
 
   // Sort months descending (newest first)
-  const sortedMonths = Array.from(allMonthsSet).sort((a, b) => {
-    const [ma, ya] = a.split("/").map(Number);
-    const [mb, yb] = b.split("/").map(Number);
-    return (yb * 12 + mb) - (ya * 12 + ma);
-  });
+  const sortedMonths = Array.from(allMonthsSet).sort((a, b) => b.localeCompare(a));
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mt-8">
@@ -87,7 +61,7 @@ export default function MonthlyComparisonTable({
           <Calendar className="h-4 w-4 text-indigo-500" />
           <h3 className="text-sm font-semibold text-slate-700">So sánh Views theo tháng (Gained)</h3>
         </div>
-        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Hiển thị tối đa 24 tháng</p>
+        {/* <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Lịch sử từ VidIQ</p> */}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -111,14 +85,13 @@ export default function MonthlyComparisonTable({
             </tr>
           </thead>
           <tbody>
-            {sortedMonths.slice(0, 24).map((month) => (
+            {sortedMonths.map((month) => (
               <tr key={month} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                 <td className="px-5 py-4 font-semibold text-slate-700">
-                  {month}
+                  {formatMonthLabel(month)}
                 </td>
                 {channels.map((channel) => {
-                  const data = monthlyData[month][channel.id];
-                  const gained = data?.gained || 0;
+                  const gained = monthlyData[month]?.[channel.id] || 0;
                   return (
                     <td key={channel.id} className="px-5 py-4 text-right font-mono text-slate-600">
                       {gained > 0 ? (

@@ -12,15 +12,15 @@ import {
 } from "recharts";
 import { BarChart3 } from "lucide-react";
 
-interface DailyStat {
-  date_str: string;
-  views_change: number;
+interface MonthlyStat {
+  month: string;
+  views_gained: number;
 }
 
 interface ChannelWithStats {
   id: string;
   title: string;
-  dailyStats: DailyStat[];
+  monthlyStats: MonthlyStat[];
 }
 
 const COLORS = [
@@ -37,22 +37,16 @@ const COLORS = [
 ];
 
 function formatNumber(num: number): string {
+  if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + "B";
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
   if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
   return num.toLocaleString("vi-VN");
 }
 
-function getMonthKey(dateStr: string): string {
-  try {
-    const timestamp = Number(dateStr);
-    if (!isNaN(timestamp)) {
-      const date = new Date(timestamp * 1000);
-      return `${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getFullYear()}`;
-    }
-    return "N/A";
-  } catch {
-    return "N/A";
-  }
+function formatMonthLabel(monthStr: string): string {
+  // input: YYYY-MM -> output: MM/YYYY
+  const [y, m] = monthStr.split("-");
+  return `${m}/${y}`;
 }
 
 export default function MonthlyViewsChart({
@@ -67,24 +61,19 @@ export default function MonthlyViewsChart({
   const allMonthsSet = new Set<string>();
 
   channels.forEach((channel) => {
-    channel.dailyStats.forEach((stat) => {
-      const monthKey = getMonthKey(stat.date_str);
-      if (monthKey === "N/A") return;
+    (channel.monthlyStats || []).forEach((stat) => {
+      const monthKey = stat.month;
       allMonthsSet.add(monthKey);
       if (!monthlyDataMap[monthKey]) monthlyDataMap[monthKey] = {};
-      monthlyDataMap[monthKey][channel.title] = (monthlyDataMap[monthKey][channel.title] || 0) + stat.views_change;
+      monthlyDataMap[monthKey][channel.id] = stat.views_gained;
     });
   });
 
-  // Sort months ascending for chart
-  const sortedMonths = Array.from(allMonthsSet).sort((a, b) => {
-    const [ma, ya] = a.split("/").map(Number);
-    const [mb, yb] = b.split("/").map(Number);
-    return (ya * 12 + ma) - (yb * 12 + mb);
-  });
+  // Sort months ascending for chart (oldest to newest)
+  const sortedMonths = Array.from(allMonthsSet).sort((a, b) => a.localeCompare(b));
 
-  const chartData = sortedMonths.slice(-24).map((month) => ({
-    month,
+  const chartData = sortedMonths.map((month) => ({
+    month: formatMonthLabel(month),
     ...monthlyDataMap[month],
   }));
 
@@ -146,7 +135,8 @@ export default function MonthlyViewsChart({
             {channels.map((ch, index) => (
               <Bar
                 key={ch.id}
-                dataKey={ch.title}
+                dataKey={ch.id}
+                name={ch.title}
                 fill={COLORS[index % COLORS.length]}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={50}
