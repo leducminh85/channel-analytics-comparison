@@ -83,7 +83,7 @@ export default function MonthlyViewsChart({
     return (ya * 12 + ma) - (yb * 12 + mb);
   });
 
-  const chartData = sortedMonths.map((month) => ({
+  const chartData = sortedMonths.slice(-24).map((month) => ({
     month,
     ...monthlyDataMap[month],
   }));
