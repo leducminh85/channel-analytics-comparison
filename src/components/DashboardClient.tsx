@@ -2,15 +2,22 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, GitCompareArrows, ArrowRight } from "lucide-react";
+import Image from "next/image";
+import { Plus, GitCompareArrows, ArrowRight, Video, Users } from "lucide-react";
 import CreateGroupModal from "@/components/CreateGroupModal";
-
 import DeleteGroupButton from "@/components/DeleteGroupButton";
 
 interface CompareGroup {
   id: string;
   name: string;
   createdAt: Date | string;
+  channels: {
+    channel: {
+      id: string;
+      logo_url: string | null;
+      title: string;
+    };
+  }[];
 }
 
 export default function DashboardClient({
@@ -21,6 +28,15 @@ export default function DashboardClient({
   userName: string;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Calculate unique channels
+  const uniqueChannelIds = new Set();
+  groups.forEach(group => {
+    group.channels?.forEach(gc => {
+      if (gc.channel.id) uniqueChannelIds.add(gc.channel.id);
+    });
+  });
+  const totalChannels = uniqueChannelIds.size;
 
   return (
     <>
@@ -52,14 +68,14 @@ export default function DashboardClient({
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
-            <svg className="h-5 w-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <Users className="h-5 w-5 text-emerald-600" />
           </div>
-          <p className="text-2xl font-bold text-slate-900">—</p>
+          <p className="text-2xl font-bold text-slate-900">{totalChannels}</p>
           <p className="mt-0.5 text-xs text-slate-500">Kênh đang theo dõi</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50">
-            <svg className="h-5 w-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <Video className="h-5 w-5 text-amber-600" />
           </div>
           <p className="text-2xl font-bold text-slate-900">—</p>
           <p className="mt-0.5 text-xs text-slate-500">Tổng số video</p>
@@ -85,35 +101,58 @@ export default function DashboardClient({
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {groups.map((group) => (
-              <Link
-                key={group.id}
-                href={`/group/${group.id}`}
-                className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5"
-              >
-                <div className="mb-3 flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/20">
-                    <GitCompareArrows className="h-5 w-5 text-white" />
+            {groups.map((group) => {
+              const channelCount = group.channels?.length || 0;
+              const logos = group.channels?.map(gc => gc.channel.logo_url).filter(Boolean) as string[];
+
+              return (
+                <Link
+                  key={group.id}
+                  href={`/group/${group.id}`}
+                  className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5"
+                >
+                  <div className="mb-4 flex items-start justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/20">
+                      <GitCompareArrows className="h-5 w-5 text-white" />
+                    </div>
+                    <DeleteGroupButton groupId={group.id} groupName={group.name} />
                   </div>
-                  <DeleteGroupButton groupId={group.id} groupName={group.name} />
-                </div>
-                <h3 className="text-base font-semibold text-slate-800 group-hover:text-indigo-600">
-                  {group.name}
-                </h3>
-                <p className="mt-1 text-xs text-slate-400">
-                  Tạo lúc{" "}
-                  {new Date(group.createdAt).toLocaleDateString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })}
-                </p>
-                <div className="mt-4 flex items-center gap-1 text-xs font-medium text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">
-                  Xem chi tiết
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </div>
-              </Link>
-            ))}
+
+                  <h3 className="text-base font-semibold text-slate-800 group-hover:text-indigo-600">
+                    {group.name}
+                  </h3>
+
+                  {/* Avatar Stack & Channel Count */}
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex -space-x-2 overflow-hidden">
+                        {logos.slice(0, 4).map((logo, i) => (
+                          <div 
+                            key={i} 
+                            className="inline-block h-7 w-7 rounded-full ring-2 ring-white overflow-hidden relative border border-slate-100"
+                          >
+                            <Image src={logo} alt="" fill className="object-cover" />
+                          </div>
+                        ))}
+                        {logos.length > 4 && (
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 ring-2 ring-white">
+                            +{logos.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      <span className="ml-3 text-xs font-medium text-slate-500">
+                        {channelCount} kênh
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 text-xs font-medium text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">
+                      Xem chi tiết
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

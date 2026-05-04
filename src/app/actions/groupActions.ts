@@ -36,6 +36,19 @@ export async function getGroups() {
 
   return await prisma.compareGroup.findMany({
     where: { userId },
+    include: {
+      channels: {
+        include: {
+          channel: {
+            select: {
+              id: true,
+              logo_url: true,
+              title: true
+            }
+          }
+        }
+      }
+    },
     orderBy: { createdAt: "desc" },
   });
 }
