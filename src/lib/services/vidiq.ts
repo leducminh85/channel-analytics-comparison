@@ -17,7 +17,7 @@ export async function getVidiqStats(channelId: string) {
     throw new Error("Thiếu cấu hình VIDIQ_BEARER_TOKEN hoặc VIDIQ_CLIENT_ID trong .env");
   }
 
-  const url = `https://api.vidiq.com/youtube/channels/public/channel-pages/${channelId}`;
+  const url = `https://api.vidiq.com/youtube/channels/public/channel-pages/${channelId}?days=365`;
   
   const response = await fetch(url, {
     headers: {
