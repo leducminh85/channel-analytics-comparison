@@ -10,9 +10,77 @@ interface VidiqDailyStat {
 }
 
 /**
- * Tương tác với API VidIQ để lấy thống kê nâng cao
- * Logic dựa trên code Python cũ của người dùng
+ * Tính toán số liệu theo tháng từ dữ liệu raw của VidIQ (Áp dụng logic Python)
  */
+export function calculateMonthlyStats(monthlyRaw: any[], currentTotalViews: number, currentSubsCount: number) {
+  if (!monthlyRaw || monthlyRaw.length === 0) return [];
+
+  const monthlyStats: any[] = [];
+
+  monthlyRaw.forEach((stat) => {
+    const ts = stat.date;
+    if (ts) {
+      const dt = new Date(ts * 1000);
+      
+      // logic lùi 2 tháng như Python
+      let newMonth = (dt.getUTCMonth() + 1) - 2;
+      let newYear = dt.getUTCFullYear();
+      
+      if (newMonth <= 0) {
+        newMonth += 12;
+        newYear -= 1;
+      }
+      
+      const monthStr = `${newYear}-${newMonth.toString().padStart(2, "0")}`;
+      
+      monthlyStats.push({
+        month: monthStr,
+        views_gained: stat.views_change || 0,
+        total_views_at_end: stat.views || 0,
+        subscribers: stat.subscribers || 0,
+        subscribers_change: stat.subscribers_change || 0
+      });
+    }
+  });
+
+  // Sắp xếp mới nhất lên đầu
+  monthlyStats.sort((a, b) => b.month.localeCompare(a.month));
+
+  // --- Bổ sung tháng hiện tại (Next Month logic) ---
+  if (monthlyStats.length > 0) {
+    const latestItem = monthlyStats[0];
+    const latestMonthStr = latestItem.month;
+    const latestTotalViews = latestItem.total_views_at_end;
+    
+    const [y, m] = latestMonthStr.split('-').map(Number);
+    let nextM = m + 1;
+    let nextY = y;
+    
+    if (nextM > 12) {
+      nextM = 1;
+      nextY += 1;
+    }
+    
+    const nextMonthStr = `${nextY}-${nextM.toString().padStart(2, "0")}`;
+    
+    if (nextMonthStr !== latestMonthStr) {
+      const nextViewsGained = Math.max(0, currentTotalViews - latestTotalViews);
+      
+      // Chèn vào đầu mảng
+      monthlyStats.unshift({
+        month: nextMonthStr,
+        views_gained: nextViewsGained,
+        total_views_at_end: currentTotalViews,
+        subscribers: currentSubsCount,
+        subscribers_change: 0
+      });
+    }
+  }
+
+  // Đảm bảo trả về sắp xếp mới nhất trước
+  return monthlyStats.sort((a, b) => b.month.localeCompare(a.month));
+}
+
 export async function getVidiqStats(channelId: string) {
   if (!VIDIQ_BEARER_TOKEN) {
     throw new Error("Thiếu cấu hình VIDIQ_BEARER_TOKEN trong .env");
@@ -36,26 +104,22 @@ export async function getVidiqStats(channelId: string) {
 
   const data = await response.json();
   const dailyData: VidiqDailyStat[] = data.daily_stats || [];
+  const monthlyRaw = data.monthly_stats || [];
   const currentTotalViews = data.current_stats?.views?.count || 0;
+  const currentSubsCount = data.current_stats?.subscribers?.count || 0;
 
   let views30Days = 0;
   if (dailyData.length >= 2) {
-    // Logic Python: views_today_realtime = current_total_views - yesterday_total_views
-    // daily_stats[0] là hôm nay (đang cập nhật), daily_stats[1] là hôm qua
     const yesterdayTotalViews = dailyData[1]?.views || 0;
     const viewsTodayRealtime = Math.max(0, currentTotalViews - yesterdayTotalViews);
-    
-    // views_past_29_days = sum(day.get("views_change", 0) for day in daily_stats[1:30])
     const past29DaysStats = dailyData.slice(1, 30);
     const viewsPast29Days = past29DaysStats.reduce(
       (sum, day) => sum + (day.views_change || 0),
       0
     );
-    
     views30Days = viewsTodayRealtime + viewsPast29Days;
   }
 
-  // Map lại dữ liệu để khớp với Prisma model DailyStat
   const dailyStats = dailyData.map((item) => ({
     date_str: String(item.date),
     views: item.views,
@@ -64,8 +128,14 @@ export async function getVidiqStats(channelId: string) {
     subscribers_change: item.subscribers_change,
   }));
 
+  // Sử dụng dữ liệu raw monthly từ API và logic Python
+  const monthlyStats = calculateMonthlyStats(monthlyRaw, currentTotalViews, currentSubsCount);
+
+  console.log(`[VidIQ] Fetched ${dailyStats.length} daily stats and ${monthlyRaw.length} monthly stats for channel ${channelId}`);
+
   return {
     views30Days: Math.round(views30Days),
     dailyStats,
+    monthlyStats,
   };
 }
