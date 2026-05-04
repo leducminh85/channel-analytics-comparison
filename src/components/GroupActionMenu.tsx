@@ -191,15 +191,15 @@ export default function GroupActionMenu({
                     key={iconName}
                     onClick={() => handleSelectIcon(iconName)}
                     disabled={isPending}
-                    className={`relative flex aspect-square items-center justify-center rounded-xl border-2 transition-all hover:scale-105 ${
+                    className={`relative flex aspect-square items-center justify-center rounded-xl border-2 transition-all hover:scale-105 text-white shadow-sm bg-gradient-to-br ${gradient} ${
                       isActive
-                        ? "border-transparent text-white shadow-md bg-gradient-to-br " + gradient
-                        : "border-slate-100 bg-slate-50 text-slate-500 hover:text-white hover:border-transparent hover:bg-gradient-to-br hover:shadow-sm " + gradient
+                        ? "border-slate-900 ring-2 ring-indigo-500 ring-offset-2 scale-110 z-10"
+                        : "border-transparent opacity-80 hover:opacity-100"
                     }`}
                   >
                     {IconComponent && <IconComponent className="h-6 w-6" />}
                     {isActive && (
-                      <div className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white shadow-sm ring-2 ring-white">
+                      <div className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white shadow-md ring-2 ring-white">
                         <Check className="h-3 w-3" />
                       </div>
                     )}

@@ -10,10 +10,13 @@ import {
   CirclePlay,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
+import * as LucideIcons from "lucide-react";
+import { ICON_COLORS } from "@/lib/iconMap";
 
 interface CompareGroup {
   id: string;
   name: string;
+  icon?: string | null;
 }
 
 export default function Sidebar({ groups }: { groups: CompareGroup[] }) {
@@ -62,6 +65,14 @@ export default function Sidebar({ groups }: { groups: CompareGroup[] }) {
             )}
             {groups.map((group) => {
               const isActive = pathname === `/group/${group.id}`;
+              
+              // Resolve dynamic icon
+              // @ts-ignore
+              const DynamicIcon = group.icon ? LucideIcons[group.icon] || GitCompareArrows : GitCompareArrows;
+              const gradientClass = group.icon && ICON_COLORS[group.icon] 
+                ? ICON_COLORS[group.icon] 
+                : "from-indigo-500 to-violet-500";
+
               return (
                 <Link
                   key={group.id}
@@ -72,7 +83,9 @@ export default function Sidebar({ groups }: { groups: CompareGroup[] }) {
                       : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
                   }`}
                 >
-                  <GitCompareArrows className="h-4 w-4 shrink-0" />
+                  <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br ${gradientClass} shadow-sm opacity-80 group-hover:opacity-100`}>
+                    <DynamicIcon className="h-3.5 w-3.5 text-white" />
+                  </div>
                   <span className="truncate">{group.name}</span>
                   <ChevronRight
                     className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${
