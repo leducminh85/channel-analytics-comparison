@@ -21,15 +21,24 @@ export async function proxy(request: NextRequest) {
   }
 
   // Redirect unauthenticated users to login
-  if (!token && (pathname.startsWith("/dashboard") || pathname.startsWith("/group"))) {
+  if (
+    !token &&
+    (pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/group") ||
+      pathname.startsWith("/admin"))
+  ) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (pathname.startsWith("/admin") && token?.role !== "ADMIN") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/group/:path*"],
+  matcher: ["/dashboard/:path*", "/group/:path*", "/admin/:path*"],
 };
