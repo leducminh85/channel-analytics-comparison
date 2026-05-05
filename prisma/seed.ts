@@ -36,6 +36,7 @@ async function main() {
       email: "admin@example.com",
       name: "Admin User",
       password: hashedPassword,
+      role: "ADMIN",
     },
   });
 

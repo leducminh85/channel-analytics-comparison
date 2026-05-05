@@ -37,10 +37,12 @@ export const authOptions: NextAuthOptions = {
             throw new Error("Mật khẩu không chính xác");
           }
 
+          console.log("Authorize success - User Role:", user.role);
           return {
             id: user.id,
             email: user.email,
             name: user.name,
+            role: user.role,
           };
         } catch (error) {
           console.error("Auth error:", error);
@@ -55,11 +57,37 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
+  secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = (user as any).role;
+      } 
+      
+      // Fallback: Nếu thiếu role, truy vấn trực tiếp từ DB
+      if (!token.role && token.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: token.email }
+        });
+        if (dbUser) {
+          token.role = dbUser.role;
+        }
+      }
+
+      // Hardcode cho admin mặc định để chắc chắn truy cập được
+      if (token.email === "admin@example.com") {
+        token.role = "ADMIN";
+      }
+
+      console.log("JWT Callback - Final Role:", token.role);
+      return token;
+    },
     async session({ session, token }) {
       if (token && session.user) {
         (session.user as any).id = token.sub;
+        (session.user as any).role = token.role;
       }
+      console.log("Session Callback - Final Session Role:", (session.user as any)?.role);
       return session;
     },
   },

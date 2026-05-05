@@ -8,8 +8,9 @@ import {
   LogOut,
   ChevronRight,
   CirclePlay,
+  Shield,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import * as LucideIcons from "lucide-react";
 import { ICON_COLORS } from "@/lib/iconMap";
 
@@ -21,6 +22,8 @@ interface CompareGroup {
 
 export default function Sidebar({ groups }: { groups: CompareGroup[] }) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as any)?.role === "ADMIN";
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar-bg text-sidebar-fg">
@@ -51,6 +54,20 @@ export default function Sidebar({ groups }: { groups: CompareGroup[] }) {
           <LayoutDashboard className="h-[18px] w-[18px]" />
           Dashboard
         </Link>
+
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className={`group mb-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+              pathname === "/admin"
+                ? "bg-sidebar-accent text-white shadow-lg shadow-indigo-500/20"
+                : "text-slate-300 hover:bg-white/5 hover:text-white"
+            }`}
+          >
+            <Shield className="h-[18px] w-[18px]" />
+            Quản trị viên
+          </Link>
+        )}
 
         {/* Groups Section */}
         <div className="mt-6">
