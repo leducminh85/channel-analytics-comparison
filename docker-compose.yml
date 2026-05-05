@@ -1,0 +1,38 @@
+
+services:
+  app:
+    build: .
+    container_name: channel_analytics_app
+    ports:
+      - "3002:3000"
+    environment:
+      # URL kết nối DB trong nội bộ mạng Docker
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/channel_analytics?schema=public
+      - NEXTAUTH_URL=http://localhost:3002
+      - NEXTAUTH_SECRET=your-secret-key-change-this-in-production
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - VIDIQ_BEARER_TOKEN=${VIDIQ_BEARER_TOKEN}
+      - VIDIQ_CLIENT_ID=${VIDIQ_CLIENT_ID}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    container_name: channel_analytics_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: channel_analytics
+    ports:
+      - "5433:5432"
+    volumes:
+      # Lưu data của DB ra thư mục local postgres-data để không bị mất khi xóa container
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
