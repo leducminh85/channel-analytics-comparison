@@ -55,7 +55,7 @@ export default function CompareTable({
         await removeChannelFromGroup(deletingChannel.id, groupId);
         setDeletingChannel(null);
       } catch (error: unknown) {
-        alert(getErrorMessage(error, "Khong the xoa kenh khoi nhom"));
+        alert(getErrorMessage(error, "Kh\u00f4ng th\u1ec3 x\u00f3a k\u00eanh kh\u1ecfi nh\u00f3m"));
         setDeletingChannel(null);
       }
     });
@@ -68,10 +68,10 @@ export default function CompareTable({
           <Users className="h-8 w-8 text-slate-400" />
         </div>
         <p className="text-sm font-medium text-slate-500">
-          ChÆ°a cÃ³ kÃªnh nÃ o trong nhÃ³m
+          {"Ch\u01b0a c\u00f3 k\u00eanh n\u00e0o trong nh\u00f3m"}
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          Sá»­ dá»¥ng form phÃ­a trÃªn Ä‘á»ƒ thÃªm kÃªnh Youtube
+          {"S\u1eed d\u1ee5ng form ph\u00eda tr\u00ean \u0111\u1ec3 th\u00eam k\u00eanh Youtube"}
         </p>
       </div>
     );
@@ -84,16 +84,16 @@ export default function CompareTable({
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/80">
               <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                KÃªnh
+                {"K\u00eanh"}
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center justify-end gap-1.5">
-                  <Eye className="h-3.5 w-3.5" /> Tá»•ng Views
+                  <Eye className="h-3.5 w-3.5" /> {"T\u1ed5ng Views"}
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center justify-end gap-1.5">
-                  <Video className="h-3.5 w-3.5" /> Sá»‘ Video
+                  <Video className="h-3.5 w-3.5" /> {"S\u1ed1 Video"}
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -103,12 +103,12 @@ export default function CompareTable({
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center justify-end gap-1.5">
-                  <TrendingUp className="h-3.5 w-3.5" /> Views (30 ngÃ y)
+                  <TrendingUp className="h-3.5 w-3.5" /> {"Views (30 ng\u00e0y)"}
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" /> Chu kÃ¬ Ä‘Äƒng
+                  <Clock className="h-3.5 w-3.5" /> {"Chu k\u1ef3 \u0111\u0103ng"}
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -122,7 +122,6 @@ export default function CompareTable({
                 key={channel.id}
                 className="group border-b border-slate-50 transition-colors last:border-0 hover:bg-indigo-50/30"
               >
-                {/* Channel identity */}
                 <td className="px-5 py-4">
                   <div className="flex items-center gap-3">
                     <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-slate-100">
@@ -154,22 +153,16 @@ export default function CompareTable({
                   </div>
                 </td>
 
-                {/* Total views */}
                 <td className="whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-medium text-slate-700">
                   {formatNumber(channel.viewCount)}
                 </td>
-
-                {/* Video count */}
                 <td className="whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-medium text-slate-700">
                   {formatNumber(channel.videoCount)}
                 </td>
-
-                {/* Subscriber count */}
                 <td className="whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-medium text-slate-700">
                   {formatNumber(channel.subscriberCount)}
                 </td>
 
-                {/* Views in the last 30 days */}
                 <td className="whitespace-nowrap px-5 py-4 text-right">
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -183,17 +176,15 @@ export default function CompareTable({
                   </span>
                 </td>
 
-                {/* Upload frequency */}
                 <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
                   {channel.uploadFrequency || "N/A"}
                 </td>
 
-                {/* Row actions */}
                 <td className="px-5 py-4 text-center relative overflow-visible">
                   <ActionMenu
                     items={[
                       {
-                        label: "XÃ³a khá»i nhÃ³m",
+                        label: "X\u00f3a kh\u1ecfi nh\u00f3m",
                         icon: <Trash2 className="h-4 w-4" />,
                         onClick: () => setDeletingChannel({ id: channel.id, title: channel.title }),
                         variant: "destructive",
@@ -212,9 +203,9 @@ export default function CompareTable({
         onClose={() => setDeletingChannel(null)}
         onConfirm={handleConfirmDelete}
         isLoading={isPending}
-        title="XÃ³a kÃªnh khá»i nhÃ³m"
-        description={`Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n xÃ³a kÃªnh "${deletingChannel?.title}" khá»i nhÃ³m so sÃ¡nh nÃ y?`}
-        confirmText="XÃ³a kÃªnh"
+        title={"X\u00f3a k\u00eanh kh\u1ecfi nh\u00f3m"}
+        description={`B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n x\u00f3a k\u00eanh "${deletingChannel?.title}" kh\u1ecfi nh\u00f3m so s\u00e1nh n\u00e0y?`}
+        confirmText={"X\u00f3a k\u00eanh"}
       />
     </div>
   );

@@ -33,7 +33,6 @@ export default async function GroupDetailPage({
     redirect("/dashboard");
   }
 
-  // Normalize channel data so downstream components always receive arrays.
   const channels = (group.channels || []).map((gc: any) => ({
     ...gc.channel,
     dailyStats: gc.channel.dailyStats || [],
@@ -42,7 +41,6 @@ export default async function GroupDetailPage({
 
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
-      {/* Header Section */}
       <div className="flex items-start justify-between">
         <div>
           <Link
@@ -50,11 +48,11 @@ export default async function GroupDetailPage({
             className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-indigo-500"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Quay láº¡i Dashboard
+            {"Quay l\u1ea1i Dashboard"}
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {channels.length} kÃªnh Ä‘ang Ä‘Æ°á»£c so sÃ¡nh
+            {`${channels.length} k\u00eanh \u0111ang \u0111\u01b0\u1ee3c so s\u00e1nh`}
           </p>
         </div>
         <div className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm rounded-xl px-2 py-1">
@@ -67,16 +65,10 @@ export default async function GroupDetailPage({
         </div>
       </div>
 
-      {/* Add Channel Section */}
       <AddChannelForm groupId={id} />
-
-      {/* Overview Table */}
       <CompareTable channels={channels} groupId={id} />
-
-      {/* 30-Day Views Chart */}
       <ViewsChart channels={channels} />
 
-      {/* Historical Monthly Data Section */}
       {channels.some((c: any) => c.monthlyStats.length > 0) && (
         <>
           <MonthlyComparisonTable channels={channels} />

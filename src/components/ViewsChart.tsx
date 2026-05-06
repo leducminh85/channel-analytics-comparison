@@ -32,18 +32,17 @@ interface TooltipEntry {
   value?: number | string;
 }
 
-// Color palette for chart lines
 const COLORS = [
-  "#6366f1", // indigo
-  "#f43f5e", // rose
-  "#10b981", // emerald
-  "#f59e0b", // amber
-  "#3b82f6", // blue
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#14b8a6", // teal
-  "#ef4444", // red
-  "#84cc16", // lime
+  "#6366f1",
+  "#f43f5e",
+  "#10b981",
+  "#f59e0b",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+  "#14b8a6",
+  "#ef4444",
+  "#84cc16",
 ];
 
 function formatNumber(num: number): string {
@@ -54,10 +53,8 @@ function formatNumber(num: number): string {
 
 function formatDate(dateStr: string): string {
   try {
-    // Handle Unix timestamps returned as strings.
     const timestamp = Number(dateStr);
     if (!isNaN(timestamp)) {
-      // VidIQ timestamps are expected to be in seconds, not milliseconds.
       const date = new Date(timestamp * 1000);
       return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
     }
@@ -113,29 +110,27 @@ export default function ViewsChart({
           <TrendingUp className="h-8 w-8 text-slate-400" />
         </div>
         <p className="text-sm font-medium text-slate-500">
-          ChÆ°a cÃ³ dá»¯ liá»‡u Ä‘á»ƒ hiá»ƒn thá»‹ biá»ƒu Ä‘á»“
+          {"Ch\u01b0a c\u00f3 d\u1eef li\u1ec7u \u0111\u1ec3 hi\u1ec3n th\u1ecb bi\u1ec3u \u0111\u1ed3"}
         </p>
       </div>
     );
   }
 
-  // Collect all unique dates across all channels and sort ascending
   const allDates = new Set<string>();
-  channels.forEach((ch) => {
-    ch.dailyStats.forEach((stat) => allDates.add(stat.date_str));
+  channels.forEach((channel) => {
+    channel.dailyStats.forEach((stat) => allDates.add(stat.date_str));
   });
   const sortedDates = Array.from(allDates).sort();
   const recentDates = sortedDates.slice(-30);
 
-  // Build chart data: each entry has a date and one metric per channel
   const chartData = recentDates.map((date) => {
     const entry: Record<string, string | number> = {
       date,
       formattedDate: formatDate(date)
     };
-    channels.forEach((ch) => {
-      const stat = ch.dailyStats.find((s) => s.date_str === date);
-      entry[ch.id] = stat?.views_change ?? 0;
+    channels.forEach((channel) => {
+      const stat = channel.dailyStats.find((s) => s.date_str === date);
+      entry[channel.id] = stat?.views_change ?? 0;
     });
     return entry;
   });
@@ -144,7 +139,7 @@ export default function ViewsChart({
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
         <TrendingUp className="h-4 w-4 text-indigo-500" />
-        So sÃ¡nh Views tÄƒng thÃªm hÃ ng ngÃ y
+        {"So s\u00e1nh Views t\u0103ng th\u00eam h\u00e0ng ng\u00e0y"}
       </h3>
       <div className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -158,7 +153,7 @@ export default function ViewsChart({
               tick={{ fontSize: 11, fill: "#94a3b8" }}
               tickLine={false}
               axisLine={{ stroke: "#e2e8f0" }}
-              tickFormatter={(val) => formatDate(val)}
+              tickFormatter={(value) => formatDate(value)}
               interval="preserveStartEnd"
               minTickGap={30}
             />
@@ -175,12 +170,12 @@ export default function ViewsChart({
               iconType="circle"
               iconSize={8}
             />
-            {channels.map((ch, index) => (
+            {channels.map((channel, index) => (
               <Line
-                key={ch.id}
+                key={channel.id}
                 type="monotone"
-                dataKey={ch.id}
-                name={ch.title}
+                dataKey={channel.id}
+                name={channel.title}
                 stroke={COLORS[index % COLORS.length]}
                 strokeWidth={2.5}
                 dot={false}

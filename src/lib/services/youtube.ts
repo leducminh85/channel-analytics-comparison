@@ -9,16 +9,13 @@ export async function getChannelIdFromUrl(url: string): Promise<string | null> {
     return null;
   }
 
-  // 1. Handle direct /channel/UC... URLs.
   const channelIdMatch = url.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/);
   if (channelIdMatch) return channelIdMatch[1];
 
-  // 2. Resolve @handle URLs through the channels API.
   const handleMatch = url.match(/@([a-zA-Z0-9._-]+)/);
   if (handleMatch) {
     const handle = handleMatch[1];
     try {
-      // Use the forHandle API variant, which expects the leading @ symbol.
       const response = await fetch(
         `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=@${handle}&key=${YOUTUBE_API_KEY}`
       );
@@ -46,7 +43,7 @@ export async function getChannelStats(channelId: string) {
   const data = await response.json();
 
   if (!data.items || data.items.length === 0) {
-    throw new Error("KhÃ´ng tÃ¬m tháº¥y kÃªnh Youtube");
+    throw new Error("Kh\u00f4ng t\u00ecm th\u1ea5y k\u00eanh Youtube");
   }
 
   const channel = data.items[0];
@@ -72,7 +69,7 @@ export async function getUploadFrequency(channelId: string): Promise<string> {
     const data = await response.json();
 
     if (!data.items || data.items.length < 2) {
-      return "KhÃ´ng Ä‘á»§ dá»¯ liá»‡u";
+      return "Kh\u00f4ng \u0111\u1ee7 d\u1eef li\u1ec7u";
     }
 
     const videos = data.items;
@@ -81,15 +78,14 @@ export async function getUploadFrequency(channelId: string): Promise<string> {
 
     const diffTime = Math.abs(newestDate.getTime() - oldestDate.getTime());
     const diffDays = diffTime / (1000 * 60 * 60 * 24);
-
     const avgDays = diffDays / (videos.length - 1);
 
     if (avgDays < 1) {
       const videosPerDay = Math.round(1 / avgDays);
-      return `${videosPerDay} video / ngÃ y`;
-    } else {
-      return `1 video / ${Math.round(avgDays)} ngÃ y`;
+      return `${videosPerDay} video / ng\u00e0y`;
     }
+
+    return `1 video / ${Math.round(avgDays)} ng\u00e0y`;
   } catch (error) {
     console.error("Error calculating upload frequency:", error);
     return "N/A";
