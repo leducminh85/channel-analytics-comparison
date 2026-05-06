@@ -1,21 +1,45 @@
 const VIDIQ_BEARER_TOKEN = process.env.VIDIQ_BEARER_TOKEN;
+const VIDIQ_BEARER_TOKEN2 = process.env.VIDIQ_BEARER_TOKEN2;
 const VIDIQ_CLIENT_ID = process.env.VIDIQ_CLIENT_ID;
+const VIDIQ_RETRY_DELAY_MS = 3000;
+// First pass immediately, then repeat the token1/token2 cycle 3 more times.
+const VIDIQ_RETRY_ROUNDS = 4;
 
 interface VidiqDailyStat {
-  date: any;
+  date: number | string;
   views: number;
   views_change: number;
   subscribers: number;
   subscribers_change: number;
 }
 
+interface VidiqMonthlyRawStat {
+  date?: number | string | null;
+  views?: number;
+  views_change?: number;
+  subscribers?: number;
+  subscribers_change?: number;
+}
+
+interface VidiqMonthlyStat {
+  month: string;
+  views_gained: number;
+  total_views_at_end: number;
+  subscribers: number;
+  subscribers_change: number;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Derive monthly aggregates from raw VidIQ data using the existing Python-compatible logic.
  */
-export function calculateMonthlyStats(monthlyRaw: any[], currentTotalViews: number, currentSubsCount: number) {
+export function calculateMonthlyStats(monthlyRaw: VidiqMonthlyRawStat[], currentTotalViews: number, currentSubsCount: number) {
   if (!monthlyRaw || monthlyRaw.length === 0) return [];
 
-  const monthlyStats: any[] = [];
+  const monthlyStats: VidiqMonthlyStat[] = [];
 
   monthlyRaw.forEach((stat) => {
     const ts = stat.date;
@@ -81,17 +105,13 @@ export function calculateMonthlyStats(monthlyRaw: any[], currentTotalViews: numb
   return monthlyStats.sort((a, b) => b.month.localeCompare(a.month));
 }
 
-export async function getVidiqStats(channelId: string) {
-  if (!VIDIQ_BEARER_TOKEN) {
-    throw new Error("Thiáº¿u cáº¥u hÃ¬nh VIDIQ_BEARER_TOKEN trong .env");
-  }
-
+async function fetchVidiqStatsWithToken(channelId: string, token: string, tokenLabel: string) {
   const url = `https://api.vidiq.com/youtube/channels/public/channel-pages/${channelId}?days=730`;
 
   const response = await fetch(url, {
     headers: {
       "accept": "*/*",
-      "authorization": `Bearer ${VIDIQ_BEARER_TOKEN}`,
+      "authorization": `Bearer ${token}`,
       "content-type": "application/json",
       "user-agent": "Mozilla/5.0",
       "x-vidiq-client": VIDIQ_CLIENT_ID || "ext vch/3.168.0",
@@ -99,7 +119,7 @@ export async function getVidiqStats(channelId: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`VidIQ API Error: ${response.status} ${response.statusText}`);
+    throw new Error(`VidIQ API Error (${tokenLabel}): ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
@@ -128,14 +148,45 @@ export async function getVidiqStats(channelId: string) {
     subscribers_change: item.subscribers_change,
   }));
 
-  // Reuse the raw monthly payload and the Python-compatible derivation logic.
   const monthlyStats = calculateMonthlyStats(monthlyRaw, currentTotalViews, currentSubsCount);
 
-  console.log(`[VidIQ] Fetched ${dailyStats.length} daily stats and ${monthlyRaw.length} monthly stats for channel ${channelId}`);
+  console.log(`[VidIQ] Fetched ${dailyStats.length} daily stats and ${monthlyRaw.length} monthly stats for channel ${channelId} using ${tokenLabel}`);
 
   return {
     views30Days: Math.round(views30Days),
     dailyStats,
     monthlyStats,
   };
+}
+
+export async function getVidiqStats(channelId: string) {
+  const tokens = [
+    { value: VIDIQ_BEARER_TOKEN, label: "VIDIQ_BEARER_TOKEN" },
+    { value: VIDIQ_BEARER_TOKEN2, label: "VIDIQ_BEARER_TOKEN2" },
+  ].filter((item): item is { value: string; label: string } => Boolean(item.value));
+
+  if (tokens.length === 0) {
+    throw new Error("Thieu cau hinh VIDIQ_BEARER_TOKEN hoac VIDIQ_BEARER_TOKEN2 trong .env");
+  }
+
+  let lastError: unknown;
+
+  for (let round = 0; round < VIDIQ_RETRY_ROUNDS; round += 1) {
+    if (round > 0) {
+      console.warn(`[VidIQ] Retry round ${round + 1}/${VIDIQ_RETRY_ROUNDS} for channel ${channelId} after ${VIDIQ_RETRY_DELAY_MS}ms`);
+      await sleep(VIDIQ_RETRY_DELAY_MS);
+    }
+
+    for (const token of tokens) {
+      try {
+        return await fetchVidiqStatsWithToken(channelId, token.value, token.label);
+      } catch (error) {
+        lastError = error;
+        console.error(`[VidIQ] Failed with ${token.label} on round ${round + 1}/${VIDIQ_RETRY_ROUNDS} for channel ${channelId}:`, error);
+      }
+    }
+  }
+
+  console.error(`[VidIQ] Exhausted retries for channel ${channelId}`, lastError);
+  throw new Error("Đã có lỗi xảy ra, vui lòng thử lại sau ít phút");
 }
