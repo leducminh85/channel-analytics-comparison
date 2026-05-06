@@ -82,7 +82,7 @@ export default function GroupActionMenu({
       <ActionMenu
         items={[
           {
-            label: "Äá»•i TÃªn",
+            label: "Sửa tên",
             icon: <Edit3 className="h-4 w-4" />,
             onClick: () => {
               setNewName(groupName);
@@ -90,12 +90,12 @@ export default function GroupActionMenu({
             },
           },
           {
-            label: "Äá»•i Logo",
+            label: "Sửa Logo",
             icon: <ImageIcon className="h-4 w-4" />,
             onClick: () => setIsLogoOpen(true),
           },
           {
-            label: "XÃ³a NhÃ³m",
+            label: "Xóa Nhóm",
             icon: <Trash2 className="h-4 w-4" />,
             onClick: () => setIsDeleteOpen(true),
             variant: "destructive",
@@ -109,18 +109,18 @@ export default function GroupActionMenu({
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         isLoading={isPending}
-        title="XÃ³a nhÃ³m so sÃ¡nh"
-        description={`Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n xÃ³a nhÃ³m "${groupName}"? Má»i dá»¯ liá»‡u vá» nhÃ³m nÃ y sáº½ bá»‹ gá»¡ bá» vÄ©nh viá»…n.`}
-        confirmText="XÃ³a ngay"
+        title="Xóa nhóm so sánh"
+        description={`Bạn có chắc chắn muốn xóa nhóm "${groupName}"? Mọi dữ liệu về nhóm này sẽ bị mất vĩnh viễn.`}
+        confirmText="Xóa ngay"
       />
 
       {/* Rename modal */}
       {isRenameOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm transition-all">
           <div className="w-full max-w-sm scale-100 transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-            <h3 className="text-lg font-bold text-slate-900">Äá»•i TÃªn NhÃ³m</h3>
+            <h3 className="text-lg font-bold text-slate-900">Sửa Tên Nhóm</h3>
             <p className="mt-2 text-sm text-slate-500">
-              Nháº­p tÃªn má»›i cho nhÃ³m so sÃ¡nh cá»§a báº¡n.
+              Nhập tên mới cho nhóm so sánh của bạn.
             </p>
 
             <form onSubmit={handleRenameSubmit} className="mt-5 space-y-4">
@@ -130,7 +130,7 @@ export default function GroupActionMenu({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  placeholder="VÃ­ dá»¥: KÃªnh Game 2024"
+                  placeholder="Ví dụ: Kênh Game 2024"
                   autoFocus
                 />
               </div>
@@ -142,7 +142,7 @@ export default function GroupActionMenu({
                   className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-100"
                   disabled={isPending}
                 >
-                  Há»§y
+                  Hủy
                 </button>
                 <button
                   type="submit"
@@ -150,7 +150,7 @@ export default function GroupActionMenu({
                   className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  LÆ°u thay Ä‘á»•i
+                  Lưu thay đổi
                 </button>
               </div>
             </form>
@@ -163,7 +163,7 @@ export default function GroupActionMenu({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm transition-all">
           <div className="w-full max-w-lg scale-100 transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900">Chá»n Logo NhÃ³m</h3>
+              <h3 className="text-lg font-bold text-slate-900">Chọn Logo Nhóm</h3>
               <button
                 onClick={() => setIsLogoOpen(false)}
                 className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
