@@ -32,18 +32,16 @@ export default function DashboardClient({
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Calculate unique channels
   const uniqueChannelIds = new Set();
-  groups.forEach(group => {
-    group.channels?.forEach(gc => {
-      if (gc.channel.id) uniqueChannelIds.add(gc.channel.id);
+  groups.forEach((group) => {
+    group.channels?.forEach((groupChannel) => {
+      if (groupChannel.channel.id) uniqueChannelIds.add(groupChannel.channel.id);
     });
   });
   const totalChannels = uniqueChannelIds.size;
 
   return (
     <>
-      {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
@@ -60,7 +58,6 @@ export default function DashboardClient({
         </button>
       </div>
 
-      {/* Stats Overview */}
       <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
@@ -85,7 +82,6 @@ export default function DashboardClient({
         </div>
       </div>
 
-      {/* Group Cards */}
       <div>
         <h2 className="mb-4 text-base font-semibold text-slate-800">
           Danh sách nhóm so sánh
@@ -106,14 +102,12 @@ export default function DashboardClient({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {groups.map((group) => {
               const channelCount = group.channels?.length || 0;
-              const logos = group.channels?.map(gc => gc.channel.logo_url).filter(Boolean) as string[];
-              
-              // Resolve dynamic icon
+              const logos = group.channels?.map((groupChannel) => groupChannel.channel.logo_url).filter(Boolean) as string[];
+
               // @ts-ignore
               const DynamicIcon = group.icon ? LucideIcons[group.icon] || GitCompareArrows : GitCompareArrows;
-
-              const gradientClass = group.icon && ICON_COLORS[group.icon] 
-                ? ICON_COLORS[group.icon] 
+              const gradientClass = group.icon && ICON_COLORS[group.icon]
+                ? ICON_COLORS[group.icon]
                 : "from-indigo-500 to-violet-500";
 
               return (
@@ -121,51 +115,54 @@ export default function DashboardClient({
                   key={group.id}
                   className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5"
                 >
+                  <Link href={`/group/${group.id}`} className="absolute inset-0 z-10 rounded-2xl">
+                    <span className="sr-only">Xem chi tiết {group.name}</span>
+                  </Link>
+
                   <div className="mb-4 flex items-start justify-between">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradientClass} shadow-lg opacity-90 group-hover:opacity-100 transition-opacity`}>
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradientClass} shadow-lg opacity-90 transition-opacity group-hover:opacity-100`}>
                       <DynamicIcon className="h-5 w-5 text-white" />
                     </div>
-                    <GroupActionMenu 
-                      groupId={group.id} 
-                      groupName={group.name} 
-                      currentIcon={group.icon} 
-                    />
+                    <div className="relative z-20">
+                      <GroupActionMenu
+                        groupId={group.id}
+                        groupName={group.name}
+                        currentIcon={group.icon}
+                      />
+                    </div>
                   </div>
 
-                  <Link href={`/group/${group.id}`} className="block">
-                    <h3 className="text-base font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                      {group.name}
-                    </h3>
+                  <h3 className="text-base font-semibold text-slate-800 transition-colors group-hover:text-indigo-600">
+                    {group.name}
+                  </h3>
 
-                    {/* Avatar Stack & Channel Count */}
-                    <div className="mt-4 flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div className="flex -space-x-2 overflow-hidden">
-                          {logos.slice(0, 4).map((logo, i) => (
-                            <div 
-                              key={i} 
-                              className="inline-block h-7 w-7 rounded-full ring-2 ring-white overflow-hidden relative border border-slate-100"
-                            >
-                              <Image src={logo} alt="" fill className="object-cover" />
-                            </div>
-                          ))}
-                          {logos.length > 4 && (
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 ring-2 ring-white">
-                              +{logos.length - 4}
-                            </div>
-                          )}
-                        </div>
-                        <span className="ml-3 text-xs font-medium text-slate-500">
-                          {channelCount} kênh
-                        </span>
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex -space-x-2 overflow-hidden">
+                        {logos.slice(0, 4).map((logo, index) => (
+                          <div
+                            key={index}
+                            className="relative inline-block h-7 w-7 overflow-hidden rounded-full border border-slate-100 ring-2 ring-white"
+                          >
+                            <Image src={logo} alt="" fill className="object-cover" />
+                          </div>
+                        ))}
+                        {logos.length > 4 && (
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 ring-2 ring-white">
+                            +{logos.length - 4}
+                          </div>
+                        )}
                       </div>
-                      
-                      <div className="flex items-center gap-1 text-xs font-medium text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">
-                        Xem chi tiết
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </div>
+                      <span className="ml-3 text-xs font-medium text-slate-500">
+                        {channelCount} kênh
+                      </span>
                     </div>
-                  </Link>
+
+                    <div className="flex items-center gap-1 text-xs font-medium text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">
+                      Xem chi tiết
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -173,7 +170,6 @@ export default function DashboardClient({
         )}
       </div>
 
-      {/* Modal */}
       <CreateGroupModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
