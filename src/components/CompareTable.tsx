@@ -27,19 +27,19 @@ function formatNumber(num: number): string {
   return num.toLocaleString("vi-VN");
 }
 
-export default function CompareTable({ 
-  channels, 
-  groupId 
-}: { 
-  channels: Channel[], 
-  groupId: string 
+export default function CompareTable({
+  channels,
+  groupId
+}: {
+  channels: Channel[],
+  groupId: string
 }) {
   const [isPending, startTransition] = useTransition();
   const [deletingChannel, setDeletingChannel] = useState<{id: string, title: string} | null>(null);
 
   const handleConfirmDelete = () => {
     if (!deletingChannel) return;
-    
+
     startTransition(async () => {
       try {
         await removeChannelFromGroup(deletingChannel.id, groupId);
@@ -58,10 +58,10 @@ export default function CompareTable({
           <Users className="h-8 w-8 text-slate-400" />
         </div>
         <p className="text-sm font-medium text-slate-500">
-          Chưa có kênh nào trong nhóm
+          ChÆ°a cÃ³ kÃªnh nÃ o trong nhÃ³m
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          Sử dụng form phía trên để thêm kênh Youtube
+          Sá»­ dá»¥ng form phÃ­a trÃªn Ä‘á»ƒ thÃªm kÃªnh Youtube
         </p>
       </div>
     );
@@ -74,16 +74,16 @@ export default function CompareTable({
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/80">
               <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Kênh
+                KÃªnh
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center justify-end gap-1.5">
-                  <Eye className="h-3.5 w-3.5" /> Tổng Views
+                  <Eye className="h-3.5 w-3.5" /> Tá»•ng Views
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center justify-end gap-1.5">
-                  <Video className="h-3.5 w-3.5" /> Số Video
+                  <Video className="h-3.5 w-3.5" /> Sá»‘ Video
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -93,16 +93,16 @@ export default function CompareTable({
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center justify-end gap-1.5">
-                  <TrendingUp className="h-3.5 w-3.5" /> Views (30 ngày)
+                  <TrendingUp className="h-3.5 w-3.5" /> Views (30 ngÃ y)
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" /> Chu kì đăng
+                  <Clock className="h-3.5 w-3.5" /> Chu kÃ¬ Ä‘Äƒng
                 </div>
               </th>
               <th className="whitespace-nowrap px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
-                {/* Tác vụ */}
+                {/* Actions */}
               </th>
             </tr>
           </thead>
@@ -112,7 +112,7 @@ export default function CompareTable({
                 key={channel.id}
                 className="group border-b border-slate-50 transition-colors last:border-0 hover:bg-indigo-50/30"
               >
-                {/* Kênh - Logo + Tên */}
+                {/* Channel identity */}
                 <td className="px-5 py-4">
                   <div className="flex items-center gap-3">
                     <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-slate-100">
@@ -144,22 +144,22 @@ export default function CompareTable({
                   </div>
                 </td>
 
-                {/* Tổng Views */}
+                {/* Total views */}
                 <td className="whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-medium text-slate-700">
                   {formatNumber(channel.viewCount)}
                 </td>
 
-                {/* Số Video */}
+                {/* Video count */}
                 <td className="whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-medium text-slate-700">
                   {formatNumber(channel.videoCount)}
                 </td>
 
-                {/* Subscriber */}
+                {/* Subscriber count */}
                 <td className="whitespace-nowrap px-5 py-4 text-right font-mono text-sm font-medium text-slate-700">
                   {formatNumber(channel.subscriberCount)}
                 </td>
 
-                {/* Views (30 ngày) */}
+                {/* Views in the last 30 days */}
                 <td className="whitespace-nowrap px-5 py-4 text-right">
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                     <TrendingUp className="h-3 w-3" />
@@ -167,17 +167,17 @@ export default function CompareTable({
                   </span>
                 </td>
 
-                {/* Chu kì đăng */}
+                {/* Upload frequency */}
                 <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
                   {channel.uploadFrequency || "N/A"}
                 </td>
 
-                {/* Nút tác vụ */}
+                {/* Row actions */}
                 <td className="px-5 py-4 text-center relative overflow-visible">
                   <ActionMenu
                     items={[
                       {
-                        label: "Xóa khỏi nhóm",
+                        label: "XÃ³a khá»i nhÃ³m",
                         icon: <Trash2 className="h-4 w-4" />,
                         onClick: () => setDeletingChannel({ id: channel.id, title: channel.title }),
                         variant: "destructive",
@@ -196,9 +196,9 @@ export default function CompareTable({
         onClose={() => setDeletingChannel(null)}
         onConfirm={handleConfirmDelete}
         isLoading={isPending}
-        title="Xóa kênh khỏi nhóm"
-        description={`Bạn có chắc chắn muốn xóa kênh "${deletingChannel?.title}" khỏi nhóm so sánh này?`}
-        confirmText="Xóa kênh"
+        title="XÃ³a kÃªnh khá»i nhÃ³m"
+        description={`Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n xÃ³a kÃªnh "${deletingChannel?.title}" khá»i nhÃ³m so sÃ¡nh nÃ y?`}
+        confirmText="XÃ³a kÃªnh"
       />
     </div>
   );

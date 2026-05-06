@@ -10,7 +10,7 @@ interface VidiqDailyStat {
 }
 
 /**
- * Tính toán số liệu theo tháng từ dữ liệu raw của VidIQ (Áp dụng logic Python)
+ * Derive monthly aggregates from raw VidIQ data using the existing Python-compatible logic.
  */
 export function calculateMonthlyStats(monthlyRaw: any[], currentTotalViews: number, currentSubsCount: number) {
   if (!monthlyRaw || monthlyRaw.length === 0) return [];
@@ -21,18 +21,18 @@ export function calculateMonthlyStats(monthlyRaw: any[], currentTotalViews: numb
     const ts = stat.date;
     if (ts) {
       const dt = new Date(ts * 1000);
-      
-      // logic lùi 2 tháng như Python
+
+      // Shift the month backward by two months to mirror the legacy Python logic.
       let newMonth = (dt.getUTCMonth() + 1) - 2;
       let newYear = dt.getUTCFullYear();
-      
+
       if (newMonth <= 0) {
         newMonth += 12;
         newYear -= 1;
       }
-      
+
       const monthStr = `${newYear}-${newMonth.toString().padStart(2, "0")}`;
-      
+
       monthlyStats.push({
         month: monthStr,
         views_gained: stat.views_change || 0,
@@ -43,30 +43,30 @@ export function calculateMonthlyStats(monthlyRaw: any[], currentTotalViews: numb
     }
   });
 
-  // Sắp xếp mới nhất lên đầu
+  // Keep the most recent month at the front of the array.
   monthlyStats.sort((a, b) => b.month.localeCompare(a.month));
 
-  // --- Bổ sung tháng hiện tại (Next Month logic) ---
+  // Add the current month when the API payload stops at the previous month.
   if (monthlyStats.length > 0) {
     const latestItem = monthlyStats[0];
     const latestMonthStr = latestItem.month;
     const latestTotalViews = latestItem.total_views_at_end;
-    
-    const [y, m] = latestMonthStr.split('-').map(Number);
+
+    const [y, m] = latestMonthStr.split("-").map(Number);
     let nextM = m + 1;
     let nextY = y;
-    
+
     if (nextM > 12) {
       nextM = 1;
       nextY += 1;
     }
-    
+
     const nextMonthStr = `${nextY}-${nextM.toString().padStart(2, "0")}`;
-    
+
     if (nextMonthStr !== latestMonthStr) {
       const nextViewsGained = Math.max(0, currentTotalViews - latestTotalViews);
-      
-      // Chèn vào đầu mảng
+
+      // Insert the inferred current month at the beginning of the list.
       monthlyStats.unshift({
         month: nextMonthStr,
         views_gained: nextViewsGained,
@@ -77,17 +77,17 @@ export function calculateMonthlyStats(monthlyRaw: any[], currentTotalViews: numb
     }
   }
 
-  // Đảm bảo trả về sắp xếp mới nhất trước
+  // Ensure the final result remains sorted newest-first.
   return monthlyStats.sort((a, b) => b.month.localeCompare(a.month));
 }
 
 export async function getVidiqStats(channelId: string) {
   if (!VIDIQ_BEARER_TOKEN) {
-    throw new Error("Thiếu cấu hình VIDIQ_BEARER_TOKEN trong .env");
+    throw new Error("Thiáº¿u cáº¥u hÃ¬nh VIDIQ_BEARER_TOKEN trong .env");
   }
 
   const url = `https://api.vidiq.com/youtube/channels/public/channel-pages/${channelId}?days=730`;
-  
+
   const response = await fetch(url, {
     headers: {
       "accept": "*/*",
@@ -128,7 +128,7 @@ export async function getVidiqStats(channelId: string) {
     subscribers_change: item.subscribers_change,
   }));
 
-  // Sử dụng dữ liệu raw monthly từ API và logic Python
+  // Reuse the raw monthly payload and the Python-compatible derivation logic.
   const monthlyStats = calculateMonthlyStats(monthlyRaw, currentTotalViews, currentSubsCount);
 
   console.log(`[VidIQ] Fetched ${dailyStats.length} daily stats and ${monthlyRaw.length} monthly stats for channel ${channelId}`);

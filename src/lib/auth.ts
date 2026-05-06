@@ -16,7 +16,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         console.log("Authorize attempt for:", credentials?.email);
         if (!credentials?.email || !credentials?.password) {
-          throw new Error("Vui lòng nhập đầy đủ email và mật khẩu");
+          throw new Error("Vui lÃ²ng nháº­p Ä‘áº§y Ä‘á»§ email vÃ  máº­t kháº©u");
         }
 
         try {
@@ -27,14 +27,14 @@ export const authOptions: NextAuthOptions = {
           console.log("User found in DB:", !!user);
 
           if (!user || !user.password) {
-            throw new Error("Tài khoản không tồn tại hoặc không thể đăng nhập bằng mật khẩu");
+            throw new Error("TÃ i khoáº£n khÃ´ng tá»“n táº¡i hoáº·c khÃ´ng thá»ƒ Ä‘Äƒng nháº­p báº±ng máº­t kháº©u");
           }
 
           const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
           console.log("Password valid:", isPasswordValid);
 
           if (!isPasswordValid) {
-            throw new Error("Mật khẩu không chính xác");
+            throw new Error("Máº­t kháº©u khÃ´ng chÃ­nh xÃ¡c");
           }
 
           console.log("Authorize success - User Role:", user.role);
@@ -62,9 +62,9 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as any).role;
-      } 
-      
-      // Fallback: Nếu thiếu role, truy vấn trực tiếp từ DB
+      }
+
+      // Fallback to a direct database lookup when the token has no role.
       if (!token.role && token.email) {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email }
@@ -74,7 +74,7 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // Hardcode cho admin mặc định để chắc chắn truy cập được
+      // Keep the seeded admin account elevated even if the token payload is incomplete.
       if (token.email === "admin@example.com") {
         token.role = "ADMIN";
       }

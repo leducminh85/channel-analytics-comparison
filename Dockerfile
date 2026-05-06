@@ -1,24 +1,24 @@
 FROM node:20-alpine
 
-# Cài đặt openssl cho Prisma
+# Install OpenSSL for Prisma
 RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-# Copy file cấu hình và cài đặt dependencies
+# Copy package manifests and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy toàn bộ code
+# Copy the full source tree
 COPY . .
 
-# Generate Prisma client
+# Generate the Prisma client
 RUN npx prisma generate
 
-# Build ứng dụng Next.js
+# Build the Next.js application
 RUN npm run build
 
 EXPOSE 3000
 
-# Chạy migrate db và khởi động app (đợi thêm 10s để đảm bảo mạng ổn định)
+# Sync the database schema and start the app after a short delay
 CMD ["sh", "-c", "sleep 10 && npx prisma db push && npm start"]

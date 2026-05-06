@@ -33,7 +33,7 @@ export default async function GroupDetailPage({
     redirect("/dashboard");
   }
 
-  // Chuẩn bị dữ liệu kênh an toàn
+  // Normalize channel data so downstream components always receive arrays.
   const channels = (group.channels || []).map((gc: any) => ({
     ...gc.channel,
     dailyStats: gc.channel.dailyStats || [],
@@ -50,19 +50,19 @@ export default async function GroupDetailPage({
             className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition-colors hover:text-indigo-500"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Quay lại Dashboard
+            Quay láº¡i Dashboard
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {channels.length} kênh đang được so sánh
+            {channels.length} kÃªnh Ä‘ang Ä‘Æ°á»£c so sÃ¡nh
           </p>
         </div>
         <div className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm rounded-xl px-2 py-1">
-          <GroupActionMenu 
-            groupId={id} 
-            groupName={group.name} 
+          <GroupActionMenu
+            groupId={id}
+            groupName={group.name}
             currentIcon={group.icon}
-            redirectToDashboard={true} 
+            redirectToDashboard={true}
           />
         </div>
       </div>

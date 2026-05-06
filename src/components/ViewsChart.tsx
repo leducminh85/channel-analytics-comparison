@@ -48,10 +48,10 @@ function formatNumber(num: number): string {
 
 function formatDate(dateStr: string): string {
   try {
-    // Nếu là timestamp (số dưới dạng chuỗi)
+    // Handle Unix timestamps returned as strings.
     const timestamp = Number(dateStr);
     if (!isNaN(timestamp)) {
-      // Giả định timestamp từ VidIQ là giây, cần đổi sang ms
+      // VidIQ timestamps are expected to be in seconds, not milliseconds.
       const date = new Date(timestamp * 1000);
       return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
     }
@@ -73,7 +73,7 @@ export default function ViewsChart({
           <TrendingUp className="h-8 w-8 text-slate-400" />
         </div>
         <p className="text-sm font-medium text-slate-500">
-          Chưa có dữ liệu để hiển thị biểu đồ
+          ChÆ°a cÃ³ dá»¯ liá»‡u Ä‘á»ƒ hiá»ƒn thá»‹ biá»ƒu Ä‘á»“
         </p>
       </div>
     );
@@ -86,9 +86,9 @@ export default function ViewsChart({
   });
   const sortedDates = Array.from(allDates).sort();
 
-  // Build chart data: each entry has date + one key per channel
+  // Build chart data: each entry has a date and one metric per channel
   const chartData = sortedDates.map((date) => {
-    const entry: Record<string, string | number> = { 
+    const entry: Record<string, string | number> = {
       date,
       formattedDate: formatDate(date)
     };
@@ -127,7 +127,7 @@ export default function ViewsChart({
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
         <TrendingUp className="h-4 w-4 text-indigo-500" />
-        So sánh Views tăng thêm hàng ngày
+        So sÃ¡nh Views tÄƒng thÃªm hÃ ng ngÃ y
       </h3>
       <div className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">

@@ -6,24 +6,24 @@ import { getVidiqStats } from "@/lib/services/vidiq";
 import { revalidatePath } from "next/cache";
 
 /**
- * Thêm một kênh vào nhóm so sánh
+ * Add a YouTube channel to a comparison group.
  */
 export async function addChannelToGroup(url: string, groupId: string) {
   try {
-    // 1. Phân giải URL để lấy Channel ID từ Youtube
+    // 1. Resolve the YouTube channel ID from the submitted URL.
     const youtubeChannelId = await getChannelIdFromUrl(url);
     if (!youtubeChannelId) {
-      throw new Error("URL không hợp lệ hoặc không tìm thấy kênh Youtube");
+      throw new Error("URL khÃ´ng há»£p lá»‡ hoáº·c khÃ´ng tÃ¬m tháº¥y kÃªnh Youtube");
     }
 
-    // 2. Fetch dữ liệu đồng thời từ Youtube và VidIQ để tối ưu hiệu suất
+    // 2. Fetch YouTube and VidIQ data in parallel to reduce latency.
     const [youtubeStats, vidiqData, uploadFreq] = await Promise.all([
       getChannelStats(youtubeChannelId),
       getVidiqStats(youtubeChannelId),
       getUploadFrequency(youtubeChannelId),
     ]);
 
-    // 3. Upsert thông tin vào bảng Channel (Cập nhật nếu đã tồn tại)
+    // 3. Upsert the channel record so existing channels stay up to date.
     const channel = await prisma.channel.upsert({
       where: { channel_id: youtubeChannelId },
       update: {
@@ -49,7 +49,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
       },
     });
 
-    // 4. Kết nối Channel với Group hiện tại (Bảng trung gian)
+    // 4. Link the channel to the selected comparison group.
     await prisma.groupChannel.upsert({
       where: {
         groupId_channelId: {
@@ -57,14 +57,14 @@ export async function addChannelToGroup(url: string, groupId: string) {
           channelId: channel.id,
         },
       },
-      update: {}, // Đã tồn tại trong nhóm thì không làm gì
+      update: {}, // No-op when the channel is already in the group.
       create: {
         groupId: groupId,
         channelId: channel.id,
       },
     });
 
-    // 5. Lưu mảng dailyStats vào bảng DailyStat
+    // 5. Persist the daily stats returned by VidIQ.
     for (const stat of vidiqData.dailyStats) {
       await prisma.dailyStat.upsert({
         where: {
@@ -90,7 +90,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
       });
     }
 
-    // 6. Lưu mảng monthlyStats vào bảng MonthlyStat
+    // 6. Persist the monthly stats returned by VidIQ.
     for (const mStat of vidiqData.monthlyStats) {
       await prisma.monthlyStat.upsert({
         where: {
@@ -116,19 +116,19 @@ export async function addChannelToGroup(url: string, groupId: string) {
       });
     }
 
-    // 7. Cập nhật lại cache UI
+    // 7. Revalidate cached UI routes that depend on this group.
     revalidatePath("/dashboard");
     revalidatePath(`/group/${groupId}`);
 
     return { success: true, channelId: channel.id };
   } catch (error: any) {
     console.error("Error in addChannelToGroup:", error);
-    throw new Error(error.message || "Đã xảy ra lỗi khi thêm kênh");
+    throw new Error(error.message || "ÄÃ£ xáº£y ra lá»—i khi thÃªm kÃªnh");
   }
 }
 
 /**
- * Xóa một kênh khỏi nhóm
+ * Remove a channel from a comparison group.
  */
 export async function removeChannelFromGroup(channelId: string, groupId: string) {
   try {
@@ -145,6 +145,6 @@ export async function removeChannelFromGroup(channelId: string, groupId: string)
     return { success: true };
   } catch (error: any) {
     console.error("Error in removeChannelFromGroup:", error);
-    throw new Error("Không thể xóa kênh khỏi nhóm");
+    throw new Error("KhÃ´ng thá»ƒ xÃ³a kÃªnh khá»i nhÃ³m");
   }
 }

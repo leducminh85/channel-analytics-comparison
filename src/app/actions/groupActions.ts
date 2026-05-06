@@ -13,11 +13,11 @@ const AVAILABLE_ICONS = [
 ];
 
 /**
- * Tạo một nhóm so sánh mới
+ * Create a new comparison group for the current user.
  */
 export async function createGroup(name: string) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) throw new Error("Bạn cần đăng nhập để thực hiện thao tác này");
+  if (!session?.user) throw new Error("Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ thá»±c hiá»‡n thao tÃ¡c nÃ y");
 
   const userId = (session.user as any).id;
   const randomIcon = AVAILABLE_ICONS[Math.floor(Math.random() * AVAILABLE_ICONS.length)];
@@ -35,7 +35,7 @@ export async function createGroup(name: string) {
 }
 
 /**
- * Lấy danh sách các nhóm của người dùng hiện tại
+ * Return the current user's comparison groups.
  */
 export async function getGroups() {
   const session = await getServerSession(authOptions);
@@ -63,7 +63,7 @@ export async function getGroups() {
 }
 
 /**
- * Lấy chi tiết nhóm bao gồm các kênh và thống kê 30 ngày qua
+ * Return group details, including channels and historical metrics.
  */
 export async function getGroupDetails(groupId: string) {
   const session = await getServerSession(authOptions);
@@ -72,7 +72,7 @@ export async function getGroupDetails(groupId: string) {
   const userId = (session.user as any).id;
 
   const group = await prisma.compareGroup.findFirst({
-    where: { 
+    where: {
       id: groupId,
       userId: userId
     },
@@ -96,9 +96,9 @@ export async function getGroupDetails(groupId: string) {
     }
   });
 
-  if (!group) throw new Error("Không tìm thấy nhóm so sánh");
+  if (!group) throw new Error("KhÃ´ng tÃ¬m tháº¥y nhÃ³m so sÃ¡nh");
 
-  // Chuyển đổi BigInt sang Number để tránh lỗi serialization của Next.js Server Actions
+  // Convert BigInt values to Number to avoid Server Actions serialization issues.
   const serializedGroup = JSON.parse(
     JSON.stringify(group, (key, value) =>
       typeof value === "bigint" ? Number(value) : value
@@ -109,7 +109,7 @@ export async function getGroupDetails(groupId: string) {
 }
 
 /**
- * Xóa một nhóm so sánh
+ * Delete one comparison group owned by the current user.
  */
 export async function deleteGroup(groupId: string) {
   const session = await getServerSession(authOptions);
@@ -119,7 +119,7 @@ export async function deleteGroup(groupId: string) {
 
   try {
     await prisma.compareGroup.delete({
-      where: { 
+      where: {
         id: groupId,
         userId: userId
       }
@@ -129,12 +129,12 @@ export async function deleteGroup(groupId: string) {
     return { success: true };
   } catch (error: any) {
     console.error("Error in deleteGroup:", error);
-    throw new Error("Không thể xóa nhóm");
+    throw new Error("KhÃ´ng thá»ƒ xÃ³a nhÃ³m");
   }
 }
 
 /**
- * Cập nhật thông tin nhóm (Tên hoặc Logo)
+ * Update editable group fields such as the name or icon.
  */
 export async function updateGroup(groupId: string, data: { name?: string; icon?: string }) {
   const session = await getServerSession(authOptions);
@@ -144,7 +144,7 @@ export async function updateGroup(groupId: string, data: { name?: string; icon?:
 
   try {
     const updatedGroup = await prisma.compareGroup.update({
-      where: { 
+      where: {
         id: groupId,
         userId: userId
       },
@@ -156,6 +156,6 @@ export async function updateGroup(groupId: string, data: { name?: string; icon?:
     return { success: true, group: updatedGroup };
   } catch (error: any) {
     console.error("Error in updateGroup:", error);
-    throw new Error("Không thể cập nhật nhóm");
+    throw new Error("KhÃ´ng thá»ƒ cáº­p nháº­t nhÃ³m");
   }
 }

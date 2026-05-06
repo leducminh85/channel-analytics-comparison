@@ -1,7 +1,7 @@
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 /**
- * Lấy Channel ID từ URL (hỗ trợ định dạng /channel/UC... hoặc /@handle)
+ * Extract a YouTube channel ID from a supported channel URL.
  */
 export async function getChannelIdFromUrl(url: string): Promise<string | null> {
   if (!YOUTUBE_API_KEY) {
@@ -9,16 +9,16 @@ export async function getChannelIdFromUrl(url: string): Promise<string | null> {
     return null;
   }
 
-  // 1. Kiểm tra định dạng /channel/UC...
+  // 1. Handle direct /channel/UC... URLs.
   const channelIdMatch = url.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/);
   if (channelIdMatch) return channelIdMatch[1];
 
-  // 2. Kiểm tra định dạng @handle
+  // 2. Resolve @handle URLs through the channels API.
   const handleMatch = url.match(/@([a-zA-Z0-9._-]+)/);
   if (handleMatch) {
     const handle = handleMatch[1];
     try {
-      // Sử dụng API forHandle (yêu cầu handle có dấu @)
+      // Use the forHandle API variant, which expects the leading @ symbol.
       const response = await fetch(
         `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=@${handle}&key=${YOUTUBE_API_KEY}`
       );
@@ -35,7 +35,7 @@ export async function getChannelIdFromUrl(url: string): Promise<string | null> {
 }
 
 /**
- * Lấy thông tin cơ bản của kênh Youtube
+ * Fetch basic channel metadata from the YouTube Data API.
  */
 export async function getChannelStats(channelId: string) {
   if (!YOUTUBE_API_KEY) throw new Error("YOUTUBE_API_KEY is missing");
@@ -46,7 +46,7 @@ export async function getChannelStats(channelId: string) {
   const data = await response.json();
 
   if (!data.items || data.items.length === 0) {
-    throw new Error("Không tìm thấy kênh Youtube");
+    throw new Error("KhÃ´ng tÃ¬m tháº¥y kÃªnh Youtube");
   }
 
   const channel = data.items[0];
@@ -60,7 +60,7 @@ export async function getChannelStats(channelId: string) {
 }
 
 /**
- * Tính toán chu kỳ đăng video dựa trên 10 video mới nhất
+ * Estimate the publishing cadence from the ten most recent videos.
  */
 export async function getUploadFrequency(channelId: string): Promise<string> {
   if (!YOUTUBE_API_KEY) return "N/A";
@@ -72,7 +72,7 @@ export async function getUploadFrequency(channelId: string): Promise<string> {
     const data = await response.json();
 
     if (!data.items || data.items.length < 2) {
-      return "Không đủ dữ liệu";
+      return "KhÃ´ng Ä‘á»§ dá»¯ liá»‡u";
     }
 
     const videos = data.items;
@@ -86,9 +86,9 @@ export async function getUploadFrequency(channelId: string): Promise<string> {
 
     if (avgDays < 1) {
       const videosPerDay = Math.round(1 / avgDays);
-      return `${videosPerDay} video / ngày`;
+      return `${videosPerDay} video / ngÃ y`;
     } else {
-      return `1 video / ${Math.round(avgDays)} ngày`;
+      return `1 video / ${Math.round(avgDays)} ngÃ y`;
     }
   } catch (error) {
     console.error("Error calculating upload frequency:", error);

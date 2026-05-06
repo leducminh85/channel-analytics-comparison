@@ -28,10 +28,10 @@ export default function GroupActionMenu({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [isLogoOpen, setIsLogoOpen] = useState(false);
-  
+
   const [newName, setNewName] = useState(groupName);
 
-  // Xử lý Xóa nhóm
+  // Handle group deletion.
   const handleConfirmDelete = () => {
     startTransition(async () => {
       try {
@@ -47,7 +47,7 @@ export default function GroupActionMenu({
     });
   };
 
-  // Xử lý Sửa tên nhóm
+  // Handle group rename.
   const handleRenameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || newName === groupName) {
@@ -65,7 +65,7 @@ export default function GroupActionMenu({
     });
   };
 
-  // Xử lý Đổi Logo
+  // Handle icon selection.
   const handleSelectIcon = (iconName: string) => {
     startTransition(async () => {
       try {
@@ -82,7 +82,7 @@ export default function GroupActionMenu({
       <ActionMenu
         items={[
           {
-            label: "Đổi Tên",
+            label: "Äá»•i TÃªn",
             icon: <Edit3 className="h-4 w-4" />,
             onClick: () => {
               setNewName(groupName);
@@ -90,12 +90,12 @@ export default function GroupActionMenu({
             },
           },
           {
-            label: "Đổi Logo",
+            label: "Äá»•i Logo",
             icon: <ImageIcon className="h-4 w-4" />,
             onClick: () => setIsLogoOpen(true),
           },
           {
-            label: "Xóa Nhóm",
+            label: "XÃ³a NhÃ³m",
             icon: <Trash2 className="h-4 w-4" />,
             onClick: () => setIsDeleteOpen(true),
             variant: "destructive",
@@ -103,24 +103,24 @@ export default function GroupActionMenu({
         ]}
       />
 
-      {/* Modal Xóa */}
+      {/* Delete modal */}
       <ConfirmModal
         isOpen={isDeleteOpen}
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         isLoading={isPending}
-        title="Xóa nhóm so sánh"
-        description={`Bạn có chắc chắn muốn xóa nhóm "${groupName}"? Mọi dữ liệu về nhóm này sẽ bị gỡ bỏ vĩnh viễn.`}
-        confirmText="Xóa ngay"
+        title="XÃ³a nhÃ³m so sÃ¡nh"
+        description={`Báº¡n cÃ³ cháº¯c cháº¯n muá»‘n xÃ³a nhÃ³m "${groupName}"? Má»i dá»¯ liá»‡u vá» nhÃ³m nÃ y sáº½ bá»‹ gá»¡ bá» vÄ©nh viá»…n.`}
+        confirmText="XÃ³a ngay"
       />
 
-      {/* Modal Đổi Tên */}
+      {/* Rename modal */}
       {isRenameOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm transition-all">
           <div className="w-full max-w-sm scale-100 transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-            <h3 className="text-lg font-bold text-slate-900">Đổi Tên Nhóm</h3>
+            <h3 className="text-lg font-bold text-slate-900">Äá»•i TÃªn NhÃ³m</h3>
             <p className="mt-2 text-sm text-slate-500">
-              Nhập tên mới cho nhóm so sánh của bạn.
+              Nháº­p tÃªn má»›i cho nhÃ³m so sÃ¡nh cá»§a báº¡n.
             </p>
 
             <form onSubmit={handleRenameSubmit} className="mt-5 space-y-4">
@@ -130,7 +130,7 @@ export default function GroupActionMenu({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  placeholder="Ví dụ: Kênh Game 2024"
+                  placeholder="VÃ­ dá»¥: KÃªnh Game 2024"
                   autoFocus
                 />
               </div>
@@ -142,7 +142,7 @@ export default function GroupActionMenu({
                   className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-100"
                   disabled={isPending}
                 >
-                  Hủy
+                  Há»§y
                 </button>
                 <button
                   type="submit"
@@ -150,7 +150,7 @@ export default function GroupActionMenu({
                   className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Lưu thay đổi
+                  LÆ°u thay Ä‘á»•i
                 </button>
               </div>
             </form>
@@ -158,22 +158,22 @@ export default function GroupActionMenu({
         </div>
       )}
 
-      {/* Modal Chọn Logo */}
+      {/* Icon picker modal */}
       {isLogoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm transition-all">
           <div className="w-full max-w-lg scale-100 transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900">Chọn Logo Nhóm</h3>
-              <button 
+              <h3 className="text-lg font-bold text-slate-900">Chá»n Logo NhÃ³m</h3>
+              <button
                 onClick={() => setIsLogoOpen(false)}
                 className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="grid grid-cols-5 gap-3 sm:grid-cols-5 relative">
-              {/* Lớp mờ khi đang lưu */}
+              {/* Saving overlay */}
               {isPending && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/50 backdrop-blur-[2px]">
                   <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />

@@ -6,55 +6,55 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-Ứng dụng web dùng để theo dõi, so sánh và quản trị dữ liệu hiệu suất của nhiều kênh YouTube trong cùng một dashboard. Hệ thống hỗ trợ nhóm so sánh, biểu đồ tăng trưởng, quản trị người dùng và phân quyền `ADMIN` / `USER`.
+Channel Analytics Comparison is a web application for tracking, comparing, and managing YouTube channel performance inside a single dashboard. It supports comparison groups, daily and monthly analytics, user administration, and role-based access control.
 
-## Mục lục
+## Table of Contents
 
-- [Tổng quan](#tổng-quan)
-- [Tính năng chính](#tính-năng-chính)
+- [Overview](#overview)
+- [Key Features](#key-features)
 - [Screenshots](#screenshots)
-- [Kiến trúc hệ thống](#kiến-trúc-hệ-thống)
-- [Công nghệ sử dụng](#công-nghệ-sử-dụng)
-- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
-- [Yêu cầu môi trường](#yêu-cầu-môi-trường)
-- [Biến môi trường](#biến-môi-trường)
-- [Chạy local](#chạy-local)
-- [Chạy với Docker](#chạy-với-docker)
-- [Tài khoản mặc định](#tài-khoản-mặc-định)
-- [Scripts hữu ích](#scripts-hữu-ích)
-- [Luồng nghiệp vụ chính](#luồng-nghiệp-vụ-chính)
-- [Bảo mật và phân quyền](#bảo-mật-và-phân-quyền)
-- [Gợi ý triển khai production](#gợi-ý-triển-khai-production)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Environment Requirements](#environment-requirements)
+- [Environment Variables](#environment-variables)
+- [Run Locally](#run-locally)
+- [Run with Docker](#run-with-docker)
+- [Default Account](#default-account)
+- [Useful Scripts](#useful-scripts)
+- [Core Application Flows](#core-application-flows)
+- [Security and Access Control](#security-and-access-control)
+- [Production Notes](#production-notes)
 
-## Tổng quan
+## Overview
 
-`Channel Analytics Comparison` được xây dựng cho nhu cầu:
+This project is built for teams that need to:
 
-- So sánh nhiều kênh YouTube trong cùng một nhóm.
-- Theo dõi chỉ số tổng quan như lượt xem, subscriber, tần suất đăng video.
-- Hiển thị dữ liệu lịch sử theo ngày và theo tháng bằng bảng và biểu đồ.
-- Quản lý tài khoản người dùng nội bộ bằng trang `Admin`.
-- Chạy được cả local lẫn Docker để thuận tiện phát triển và demo.
+- Compare multiple YouTube channels inside the same workspace.
+- Track top-line metrics such as total views, subscribers, video count, and publishing cadence.
+- Review historical trends through daily and monthly tables and charts.
+- Manage internal users through an admin interface.
+- Run the stack locally or through Docker for development and demos.
 
-## Tính năng chính
+## Key Features
 
-- Đăng nhập bằng `NextAuth Credentials`.
-- Tự động điều hướng từ `/` đến `/login` hoặc `/dashboard` theo trạng thái đăng nhập.
-- Tạo, sửa, xoá nhóm so sánh kênh.
-- Thêm kênh YouTube vào nhóm bằng URL kênh.
-- Đồng bộ dữ liệu từ YouTube Data API và VidIQ API.
-- Biểu đồ 30 ngày gần nhất và thống kê tăng trưởng theo tháng.
-- Sidebar điều hướng theo danh sách nhóm.
-- Trang quản trị `Admin` để:
-  - xem danh sách người dùng
-  - tạo user mới
-  - reset mật khẩu
-  - xoá user
-- Bảo vệ route `/admin` để chỉ `ADMIN` truy cập được.
+- Credentials-based authentication with `NextAuth`
+- Automatic redirect from `/` to `/login` or `/dashboard` depending on session state
+- Create, rename, update, and delete comparison groups
+- Add YouTube channels to groups from channel URLs
+- Sync channel data from the YouTube Data API and VidIQ API
+- Visualize daily view growth and monthly performance trends
+- Navigate groups from a persistent sidebar
+- Manage users from the `Admin` page:
+  - list users
+  - create new users
+  - reset passwords
+  - delete users
+- Restrict `/admin` to users with the `ADMIN` role
 
 ## Screenshots
 
-Ảnh dưới đây được chụp trực tiếp từ ứng dụng đang chạy local bằng Docker, tập trung vào các tính năng phân tích chính thay vì các màn hình phụ trợ.
+The images below are real screenshots captured from the running application, focused on the primary analytics experience.
 
 ### Dashboard overview
 
@@ -76,9 +76,9 @@
 
 ![Monthly views chart](./docs/images/monthly-views-chart.png)
 
-## Kiến trúc hệ thống
+## Architecture
 
-Ứng dụng sử dụng mô hình App Router của Next.js với Server Components, Server Actions và Prisma làm tầng truy cập dữ liệu.
+The application uses the Next.js App Router with Server Components, Server Actions, and Prisma as the data access layer.
 
 ```mermaid
 flowchart LR
@@ -91,19 +91,19 @@ flowchart LR
     D --> H[VidIQ API]
 ```
 
-## Công nghệ sử dụng
+## Tech Stack
 
-| Nhóm | Công nghệ |
+| Area | Technology |
 | --- | --- |
 | Frontend | Next.js 16, React 19, Tailwind CSS 4 |
-| Auth | NextAuth |
+| Authentication | NextAuth |
 | Database | PostgreSQL |
 | ORM | Prisma 7 + `@prisma/adapter-pg` |
 | Charts | Recharts |
 | Icons | Lucide React |
-| Container | Docker, Docker Compose |
+| Containers | Docker, Docker Compose |
 
-## Cấu trúc thư mục
+## Project Structure
 
 ```text
 .
@@ -131,19 +131,19 @@ flowchart LR
 └── README.md
 ```
 
-## Yêu cầu môi trường
+## Environment Requirements
 
 - Node.js `20+`
 - npm `10+`
 - PostgreSQL `15+`
-- Docker Desktop nếu chạy bằng container
-- API key hợp lệ cho:
+- Docker Desktop if you want to run the stack in containers
+- Valid credentials for:
   - YouTube Data API v3
   - VidIQ API
 
-## Biến môi trường
+## Environment Variables
 
-Tạo file `.env` ở root project:
+Create a `.env` file in the project root:
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5433/channel_analytics?schema=public"
@@ -156,34 +156,34 @@ VIDIQ_BEARER_TOKEN="your_vidiq_bearer_token"
 VIDIQ_CLIENT_ID="your_vidiq_client_id"
 ```
 
-### Mô tả biến
+### Variable reference
 
-| Biến | Bắt buộc | Mô tả |
+| Variable | Required | Description |
 | --- | --- | --- |
-| `DATABASE_URL` | Có | Kết nối PostgreSQL |
-| `NEXTAUTH_URL` | Có | Base URL của ứng dụng |
-| `NEXTAUTH_SECRET` | Có | Secret cho JWT/session |
-| `YOUTUBE_API_KEY` | Có | API key lấy dữ liệu kênh YouTube |
-| `VIDIQ_BEARER_TOKEN` | Có | Token truy cập VidIQ |
-| `VIDIQ_CLIENT_ID` | Có | Client ID gửi kèm request VidIQ |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `NEXTAUTH_URL` | Yes | Base URL of the application |
+| `NEXTAUTH_SECRET` | Yes | Secret used for JWT/session signing |
+| `YOUTUBE_API_KEY` | Yes | API key for YouTube channel metadata |
+| `VIDIQ_BEARER_TOKEN` | Yes | Bearer token for VidIQ |
+| `VIDIQ_CLIENT_ID` | Yes | Client ID sent with VidIQ requests |
 
-## Chạy local
+## Run Locally
 
-### 1. Cài dependencies
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Khởi động PostgreSQL
+### 2. Start PostgreSQL
 
-Bạn có thể dùng PostgreSQL local hoặc khởi động nhanh bằng Docker:
+You can use a local PostgreSQL instance or start one with Docker:
 
 ```bash
 docker compose up -d db
 ```
 
-### 3. Đồng bộ schema và seed dữ liệu
+### 3. Sync the schema and seed data
 
 ```bash
 npx prisma db push
@@ -191,111 +191,99 @@ npx prisma generate
 npx prisma db seed
 ```
 
-### 4. Chạy ứng dụng
+### 4. Start the application
 
 ```bash
 npm run dev
 ```
 
-Mặc định app chạy ở:
+By default:
 
-- App: `http://localhost:3000` hoặc URL bạn cấu hình
-- DB qua Docker: `localhost:5433`
+- App: `http://localhost:3000`
+- Database through Docker: `localhost:5433`
 
-## Chạy với Docker
+## Run with Docker
 
-### Build image
+### Build the image
 
 ```bash
 docker compose build
 ```
 
-### Khởi động toàn bộ stack
+### Start the full stack
 
 ```bash
 docker compose up -d
 ```
 
-### Truy cập
+### Access the services
 
 - Application: `http://localhost:3002`
 - PostgreSQL: `localhost:5433`
 
-### Dừng container
+### Stop the containers
 
 ```bash
 docker compose down
 ```
 
-### Xoá cả volume data local
+### Remove containers and the local database volume
 
 ```bash
 docker compose down -v
 ```
 
-## Tài khoản mặc định
+## Default Account
 
-Seed hiện tại tạo sẵn một tài khoản quản trị:
+The seed script creates a default administrator account:
 
 - Email: `admin@example.com`
 - Password: `admin123`
 - Role: `ADMIN`
 
-Lưu ý:
+Use this only for local development. Replace the credentials and `NEXTAUTH_SECRET` before deploying anywhere real.
 
-- Chỉ dùng thông tin này cho local/dev.
-- Bắt buộc đổi `NEXTAUTH_SECRET` và mật khẩu admin khi triển khai thật.
+## Useful Scripts
 
-## Scripts hữu ích
-
-| Script | Mô tả |
+| Script | Description |
 | --- | --- |
-| `npm run dev` | Chạy môi trường phát triển |
-| `npm run build` | Build production |
-| `npm run start` | Chạy bản build production |
-| `npm run lint` | Kiểm tra ESLint |
+| `npm run dev` | Start the development server |
+| `npm run build` | Build the production bundle |
+| `npm run start` | Run the production build |
+| `npm run lint` | Run ESLint |
 
-## Luồng nghiệp vụ chính
+## Core Application Flows
 
-### Đăng nhập và phân quyền
+### Authentication and authorization
 
-1. Người dùng đăng nhập bằng email và mật khẩu.
-2. NextAuth xác thực qua `CredentialsProvider`.
-3. Session JWT được gắn `role`.
-4. Middleware và server layout kiểm tra quyền truy cập route.
-5. User thường vào dashboard, admin có thêm quyền vào `/admin`.
+1. A user signs in with email and password.
+2. NextAuth validates the credentials through `CredentialsProvider`.
+3. The JWT session receives a `role`.
+4. Middleware and server layouts enforce route-level access rules.
+5. Standard users land on the dashboard, while admins can also reach `/admin`.
 
-### Thêm kênh vào nhóm
+### Adding a channel to a group
 
-1. Nhập URL kênh YouTube.
-2. Ứng dụng trích xuất `channelId`.
-3. Server gọi YouTube API và VidIQ API song song.
-4. Dữ liệu được `upsert` vào bảng `Channel`, `DailyStat`, `MonthlyStat`.
-5. UI được revalidate để hiển thị dữ liệu mới.
+1. A user submits a YouTube channel URL.
+2. The app resolves the `channelId`.
+3. The server calls the YouTube API and VidIQ API in parallel.
+4. The data is upserted into `Channel`, `DailyStat`, and `MonthlyStat`.
+5. The related UI routes are revalidated to show the latest metrics.
 
-## Bảo mật và phân quyền
+## Security and Access Control
 
-- Route `/admin` được bảo vệ ở 2 tầng:
-  - middleware token check
-  - server-side layout check
-- Chỉ tài khoản `role = ADMIN` mới truy cập được trang quản trị.
-- Session sử dụng `JWT strategy`.
-- Password được hash bằng `bcryptjs`.
+- `/admin` is protected at two layers:
+  - middleware token checks
+  - server-side layout checks
+- Only users with `role = ADMIN` can access the admin area.
+- Sessions use the `jwt` strategy.
+- Passwords are hashed with `bcryptjs`.
 
-## Gợi ý triển khai production
+## Production Notes
 
-- Đổi toàn bộ secret mặc định trong `.env`.
-- Không commit file `.env` chứa key thật.
-- Thay thông tin admin seed mặc định bằng dữ liệu bootstrap riêng.
-- Dùng reverse proxy như Nginx hoặc deploy qua nền tảng cloud có TLS.
-- Tách database production khỏi máy local hoặc volume local Docker.
-- Thiết lập backup định kỳ cho PostgreSQL.
-
-## Ghi chú
-
-- `README` này mô tả trạng thái ứng dụng hiện tại theo source code trong repository.
-- Nếu bạn muốn biến README thành tài liệu mở rộng cho đội ngũ nội bộ, bước tiếp theo hợp lý là bổ sung:
-  - ảnh chụp màn hình thật của dashboard
-  - luồng CI/CD
-  - tiêu chuẩn coding
-  - checklist release
+- Replace all default secrets in `.env`.
+- Never commit real credentials to the repository.
+- Replace the default seeded admin account with your own bootstrap process.
+- Put the app behind TLS, typically through a reverse proxy or a cloud platform that terminates HTTPS.
+- Use a dedicated production database instead of a local Docker volume.
+- Set up regular PostgreSQL backups.

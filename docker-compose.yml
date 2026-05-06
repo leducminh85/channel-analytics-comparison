@@ -1,4 +1,3 @@
-
 services:
   app:
     build: .
@@ -6,7 +5,7 @@ services:
     ports:
       - "3002:3000"
     environment:
-      # URL kết nối DB trong nội bộ mạng Docker
+      # Database connection URL inside the Docker network
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/channel_analytics?schema=public
       - NEXTAUTH_URL=http://localhost:3002
       - NEXTAUTH_SECRET=your-secret-key-change-this-in-production
@@ -28,7 +27,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      # Lưu data của DB ra thư mục local postgres-data để không bị mất khi xóa container
+      # Persist database data to the local postgres-data directory
       - ./postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
