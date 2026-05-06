@@ -44,7 +44,12 @@ export function calculateMonthlyStats(monthlyRaw: VidiqMonthlyRawStat[], current
   monthlyRaw.forEach((stat) => {
     const ts = stat.date;
     if (ts) {
-      const dt = new Date(ts * 1000);
+      const timestamp = Number(ts);
+      if (Number.isNaN(timestamp)) {
+        return;
+      }
+
+      const dt = new Date(timestamp * 1000);
 
       // Shift the month backward by two months to mirror the legacy Python logic.
       let newMonth = (dt.getUTCMonth() + 1) - 2;

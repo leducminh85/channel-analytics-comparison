@@ -26,6 +26,12 @@ interface ChannelWithStats {
   dailyStats: DailyStat[];
 }
 
+interface TooltipEntry {
+  color?: string;
+  name?: string;
+  value?: number | string;
+}
+
 // Color palette for chart lines
 const COLORS = [
   "#6366f1", // indigo
@@ -61,12 +67,46 @@ function formatDate(dateStr: string): string {
   }
 }
 
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+      <p className="mb-2 text-xs font-semibold text-slate-500">{formatDate(String(label ?? ""))}</p>
+      <div className="space-y-1.5">
+        {payload.map((entry, index) => (
+          <div key={`${entry.name || "series"}-${index}`} className="flex items-center gap-2 text-xs">
+            <div
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="text-slate-600">{entry.name}:</span>
+            <span className="font-semibold text-slate-900">
+              +{formatNumber(Number(entry.value ?? 0))}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ViewsChart({
   channels,
 }: {
   channels: ChannelWithStats[];
 }) {
-  if (channels.length === 0) {
+  const hasDailyStats = channels.some((channel) => channel.dailyStats.length > 0);
+
+  if (channels.length === 0 || !hasDailyStats) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-16">
         <div className="mb-3 rounded-full bg-slate-100 p-4">
@@ -99,30 +139,6 @@ export default function ViewsChart({
     });
     return entry;
   });
-
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload) return null;
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-        <p className="mb-2 text-xs font-semibold text-slate-500">{formatDate(label)}</p>
-        <div className="space-y-1.5">
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 text-xs">
-              <div
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: entry.color }}
-              />
-              <span className="text-slate-600">{entry.name}:</span>
-              <span className="font-semibold text-slate-900">
-                +{formatNumber(entry.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

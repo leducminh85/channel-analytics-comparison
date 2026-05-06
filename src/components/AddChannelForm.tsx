@@ -4,22 +4,29 @@ import { useState, useTransition } from "react";
 import { Plus, Loader2, LinkIcon } from "lucide-react";
 import { addChannelToGroup } from "@/app/actions/channelActions";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function AddChannelForm({ groupId }: { groupId: string }) {
   const [url, setUrl] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
     setError("");
+    setWarning("");
 
     startTransition(async () => {
       try {
-        await addChannelToGroup(url.trim(), groupId);
+        const result = await addChannelToGroup(url.trim(), groupId);
         setUrl("");
-      } catch (err: any) {
-        setError(err.message || "Đã xảy ra lỗi khi thêm kênh");
+        setWarning(result.warning || "");
+      } catch (error: unknown) {
+        setError(getErrorMessage(error, "Đã xảy ra lỗi khi thêm kênh"));
       }
     });
   };
@@ -35,7 +42,11 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
           <input
             type="text"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              if (error) setError("");
+              if (warning) setWarning("");
+            }}
             placeholder="Dán URL kênh Youtube (VD: https://youtube.com/@MrBeast)"
             className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             disabled={isPending}
@@ -70,6 +81,12 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
       {error && (
         <div className="mt-3 rounded-lg bg-red-50 px-4 py-2.5 text-xs text-red-600">
           {error}
+        </div>
+      )}
+
+      {warning && (
+        <div className="mt-3 rounded-lg bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
+          {warning}
         </div>
       )}
     </div>

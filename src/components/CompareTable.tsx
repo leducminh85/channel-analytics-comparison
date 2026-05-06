@@ -18,6 +18,8 @@ interface Channel {
   viewCount: number;
   uploadFrequency: string | null;
   views30Days: number;
+  dailyStats?: { date_str: string }[];
+  monthlyStats?: { month: string }[];
 }
 
 function formatNumber(num: number): string {
@@ -25,6 +27,14 @@ function formatNumber(num: number): string {
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
   if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
   return num.toLocaleString("vi-VN");
+}
+
+function hasVidiqData(channel: Channel): boolean {
+  return Boolean(channel.dailyStats?.length || channel.monthlyStats?.length);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export default function CompareTable({
@@ -44,8 +54,8 @@ export default function CompareTable({
       try {
         await removeChannelFromGroup(deletingChannel.id, groupId);
         setDeletingChannel(null);
-      } catch (error: any) {
-        alert(error.message);
+      } catch (error: unknown) {
+        alert(getErrorMessage(error, "Khong the xoa kenh khoi nhom"));
         setDeletingChannel(null);
       }
     });
@@ -161,7 +171,13 @@ export default function CompareTable({
 
                 {/* Views in the last 30 days */}
                 <td className="whitespace-nowrap px-5 py-4 text-right">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      hasVidiqData(channel)
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
                     <TrendingUp className="h-3 w-3" />
                     {formatNumber(channel.views30Days)}
                   </span>
