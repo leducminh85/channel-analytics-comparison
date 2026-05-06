@@ -85,9 +85,10 @@ export default function ViewsChart({
     ch.dailyStats.forEach((stat) => allDates.add(stat.date_str));
   });
   const sortedDates = Array.from(allDates).sort();
+  const recentDates = sortedDates.slice(-30);
 
   // Build chart data: each entry has a date and one metric per channel
-  const chartData = sortedDates.map((date) => {
+  const chartData = recentDates.map((date) => {
     const entry: Record<string, string | number> = {
       date,
       formattedDate: formatDate(date)
