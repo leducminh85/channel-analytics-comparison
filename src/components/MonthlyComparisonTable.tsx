@@ -33,6 +33,145 @@ function formatMonthLabel(monthStr: string): string {
   return `${m}/${y}`;
 }
 
+function getMonthYear(monthStr: string | null, fallbackYear: number) {
+  if (!monthStr) return fallbackYear;
+  const year = Number(monthStr.split("-")[0]);
+  return Number.isFinite(year) ? year : fallbackYear;
+}
+
+const VI_MONTHS = [
+  "Tháng 1",
+  "Tháng 2",
+  "Tháng 3",
+  "Tháng 4",
+  "Tháng 5",
+  "Tháng 6",
+  "Tháng 7",
+  "Tháng 8",
+  "Tháng 9",
+  "Tháng 10",
+  "Tháng 11",
+  "Tháng 12",
+];
+
+function MonthPickerField({
+  label,
+  value,
+  minMonth,
+  maxMonth,
+  isOpen,
+  displayYear,
+  panelAlign = "left",
+  onOpen,
+  onYearChange,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  minMonth?: string;
+  maxMonth?: string;
+  isOpen: boolean;
+  displayYear: number;
+  panelAlign?: "left" | "right";
+  onOpen: () => void;
+  onYearChange: (year: number) => void;
+  onChange: (month: string | null) => void;
+}) {
+  const minYear = minMonth ? Number(minMonth.slice(0, 4)) : displayYear;
+  const maxYear = maxMonth ? Number(maxMonth.slice(0, 4)) : displayYear;
+  const clampedYear = Math.min(Math.max(displayYear, minYear), maxYear);
+
+  useEffect(() => {
+    if (clampedYear !== displayYear) onYearChange(clampedYear);
+  }, [clampedYear, displayYear, onYearChange]);
+
+  return (
+    <div className="relative">
+      <p className="mb-1 text-xs font-medium text-slate-500">{label}</p>
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+          isOpen
+            ? "border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-500/10"
+            : "border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-200 hover:bg-white"
+        }`}
+      >
+        <span className={value ? "font-semibold" : "text-slate-400"}>
+          {value ? formatMonthLabel(value) : "Chọn tháng"}
+        </span>
+        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+      </button>
+
+      {isOpen && (
+        <div
+          className={`absolute top-[66px] z-40 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl ${
+            panelAlign === "right" ? "right-0" : "left-0"
+          }`}
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <button
+              type="button"
+              disabled={clampedYear <= minYear}
+              onClick={() => onYearChange(clampedYear - 1)}
+              className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              Năm trước
+            </button>
+            <span className="text-sm font-semibold text-slate-800">{clampedYear}</span>
+            <button
+              type="button"
+              disabled={clampedYear >= maxYear}
+              onClick={() => onYearChange(clampedYear + 1)}
+              className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              Năm sau
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1.5">
+            {VI_MONTHS.map((monthLabel, index) => {
+              const monthValue = `${clampedYear}-${String(index + 1).padStart(2, "0")}`;
+              const disabled = Boolean(
+                (minMonth && monthValue < minMonth) || (maxMonth && monthValue > maxMonth)
+              );
+              const selected = value === monthValue;
+
+              return (
+                <button
+                  key={monthValue}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onChange(monthValue)}
+                  className={`rounded-lg px-2 py-2 text-xs font-medium transition-colors ${
+                    selected
+                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20"
+                      : disabled
+                        ? "cursor-not-allowed bg-slate-50 text-slate-300"
+                        : "bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+                  }`}
+                >
+                  {monthLabel}
+                </button>
+              );
+            })}
+          </div>
+
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              className="mt-3 w-full rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            >
+              Bỏ chọn
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MonthlyComparisonTable({
   channels,
   initialSettings,
@@ -41,8 +180,16 @@ export default function MonthlyComparisonTable({
   initialSettings: MonthlyComparisonSettings;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
   const [settings, setSettings] = useState<MonthlyComparisonSettings>(initialSettings);
   const [showFilters, setShowFilters] = useState(false);
+  const [activeMonthPicker, setActiveMonthPicker] = useState<"start" | "end" | null>(null);
+  const [startPickerYear, setStartPickerYear] = useState(() =>
+    getMonthYear(initialSettings.customStartMonth, new Date().getFullYear())
+  );
+  const [endPickerYear, setEndPickerYear] = useState(() =>
+    getMonthYear(initialSettings.customEndMonth, new Date().getFullYear())
+  );
   const [, startTransition] = useTransition();
 
   const saveSettings = (nextSettings: MonthlyComparisonSettings) => {
@@ -62,6 +209,20 @@ export default function MonthlyComparisonTable({
       scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
     }
   }, [channels, settings.filterMode, settings.customStartMonth, settings.customEndMonth]);
+
+  useEffect(() => {
+    if (!showFilters) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!filterRef.current?.contains(event.target as Node)) {
+        setShowFilters(false);
+        setActiveMonthPicker(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [showFilters]);
 
   const { channelData, sortedMonths, visibleMonths, displayChannels } = useMemo(() => {
     const allMonthsSet = new Set<string>();
@@ -142,16 +303,33 @@ export default function MonthlyComparisonTable({
     return "Tất cả tháng";
   };
 
+  const minAvailableMonth = sortedMonths[0];
+  const maxAvailableMonth = sortedMonths[sortedMonths.length - 1];
+
+  const openMonthPicker = (picker: "start" | "end") => {
+    setActiveMonthPicker((current) => (current === picker ? null : picker));
+    if (picker === "start") {
+      setStartPickerYear(getMonthYear(settings.customStartMonth, getMonthYear(maxAvailableMonth, new Date().getFullYear())));
+    } else {
+      setEndPickerYear(getMonthYear(settings.customEndMonth, getMonthYear(maxAvailableMonth, new Date().getFullYear())));
+    }
+  };
+
+  const updateCustomMonth = (key: "customStartMonth" | "customEndMonth", value: string | null) => {
+    updateFilter({ [key]: value });
+    setActiveMonthPicker(null);
+  };
+
   if (channels.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm mt-8 w-full overflow-hidden">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm mt-8 w-full overflow-visible">
       <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-indigo-500" />
           <h3 className="text-sm font-semibold text-slate-700">So sánh Views theo tháng (Gained)</h3>
         </div>
-        <div className="relative">
+        <div ref={filterRef} className="relative">
           <button
             type="button"
             onClick={() => setShowFilters((value) => !value)}
@@ -162,7 +340,7 @@ export default function MonthlyComparisonTable({
           </button>
 
           {showFilters && (
-            <div className="absolute right-0 top-10 z-30 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+            <div className="absolute right-0 top-10 z-30 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { mode: "all", label: "Tất cả" },
@@ -191,28 +369,29 @@ export default function MonthlyComparisonTable({
 
               {settings.filterMode === "custom" && (
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <label className="text-xs font-medium text-slate-500">
-                    Từ tháng
-                    <input
-                      type="month"
-                      value={settings.customStartMonth || ""}
-                      min={sortedMonths[0]}
-                      max={settings.customEndMonth || sortedMonths[sortedMonths.length - 1]}
-                      onChange={(event) => updateFilter({ customStartMonth: event.target.value || null })}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    />
-                  </label>
-                  <label className="text-xs font-medium text-slate-500">
-                    Đến tháng
-                    <input
-                      type="month"
-                      value={settings.customEndMonth || ""}
-                      min={settings.customStartMonth || sortedMonths[0]}
-                      max={sortedMonths[sortedMonths.length - 1]}
-                      onChange={(event) => updateFilter({ customEndMonth: event.target.value || null })}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    />
-                  </label>
+                  <MonthPickerField
+                    label="Từ tháng"
+                    value={settings.customStartMonth}
+                    minMonth={minAvailableMonth}
+                    maxMonth={settings.customEndMonth || maxAvailableMonth}
+                    isOpen={activeMonthPicker === "start"}
+                    displayYear={startPickerYear}
+                    onOpen={() => openMonthPicker("start")}
+                    onYearChange={setStartPickerYear}
+                    onChange={(month) => updateCustomMonth("customStartMonth", month)}
+                  />
+                  <MonthPickerField
+                    label="Đến tháng"
+                    value={settings.customEndMonth}
+                    minMonth={settings.customStartMonth || minAvailableMonth}
+                    maxMonth={maxAvailableMonth}
+                    isOpen={activeMonthPicker === "end"}
+                    displayYear={endPickerYear}
+                    panelAlign="right"
+                    onOpen={() => openMonthPicker("end")}
+                    onYearChange={setEndPickerYear}
+                    onChange={(month) => updateCustomMonth("customEndMonth", month)}
+                  />
                 </div>
               )}
             </div>
