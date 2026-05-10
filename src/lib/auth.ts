@@ -61,15 +61,18 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        token.sub = (user as any).id;
         token.role = (user as any).role;
       }
 
-      // Fallback to a direct database lookup when the token has no role.
-      if (!token.role && token.email) {
+      // Keep token identity in sync with the current database. This prevents
+      // stale JWTs from pointing at users that were removed by a local reseed.
+      if (token.email) {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email }
         });
         if (dbUser) {
+          token.sub = dbUser.id;
           token.role = dbUser.role;
         }
       }
