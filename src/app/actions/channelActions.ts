@@ -9,15 +9,99 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function normalizeYoutubeUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return url.trim().replace(/\/$/, "");
+  }
+}
+
+async function findExistingChannelFromUrl(url: string) {
+  const normalizedUrl = normalizeYoutubeUrl(url);
+  const channelIdMatch = normalizedUrl.match(/\/channel\/(UC[a-zA-Z0-9_-]{22})/);
+
+  if (channelIdMatch) {
+    const existingById = await prisma.channel.findUnique({
+      where: { channel_id: channelIdMatch[1] },
+    });
+    if (existingById) return existingById;
+  }
+
+  const handleMatch = normalizedUrl.match(/@([a-zA-Z0-9._-]+)/);
+  const handle = handleMatch?.[1];
+
+  return prisma.channel.findFirst({
+    where: {
+      OR: [
+        { channel_url: normalizedUrl },
+        { channel_url: `${normalizedUrl}/` },
+        ...(handle ? [{ channel_url: { contains: `@${handle}` } }] : []),
+      ],
+    },
+  });
+}
+
 /**
  * Add a YouTube channel to a comparison group.
  */
 export async function addChannelToGroup(url: string, groupId: string) {
   try {
+    const existingChannel = await findExistingChannelFromUrl(url);
+
+    if (existingChannel) {
+      await prisma.groupChannel.upsert({
+        where: {
+          groupId_channelId: {
+            groupId,
+            channelId: existingChannel.id,
+          },
+        },
+        update: {},
+        create: {
+          groupId,
+          channelId: existingChannel.id,
+        },
+      });
+
+      revalidatePath("/dashboard");
+      revalidatePath(`/group/${groupId}`);
+
+      return { success: true, channelId: existingChannel.id };
+    }
+
     // 1. Resolve the YouTube channel ID from the submitted URL.
     const youtubeChannelId = await getChannelIdFromUrl(url);
     if (!youtubeChannelId) {
       throw new Error("URL không hợp lệ hoặc không tìm thấy kênh Youtube");
+    }
+
+    const existingByYoutubeId = await prisma.channel.findUnique({
+      where: { channel_id: youtubeChannelId },
+    });
+
+    if (existingByYoutubeId) {
+      await prisma.groupChannel.upsert({
+        where: {
+          groupId_channelId: {
+            groupId,
+            channelId: existingByYoutubeId.id,
+          },
+        },
+        update: {},
+        create: {
+          groupId,
+          channelId: existingByYoutubeId.id,
+        },
+      });
+
+      revalidatePath("/dashboard");
+      revalidatePath(`/group/${groupId}`);
+
+      return { success: true, channelId: existingByYoutubeId.id };
     }
 
     // 2. YouTube data is required. VidIQ data is best-effort.
