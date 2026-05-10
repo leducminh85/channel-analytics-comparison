@@ -43,6 +43,7 @@ model User {
   image         String?
   password      String?
   role          String         @default("USER")
+  monthlyComparisonSettings Json?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @default(now()) @updatedAt
   accounts      Account[]

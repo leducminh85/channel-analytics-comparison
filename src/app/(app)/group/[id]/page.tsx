@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getGroupDetails } from "@/app/actions/groupActions";
+import { getMonthlyComparisonSettings } from "@/app/actions/monthlyComparisonSettingsActions";
 import AddChannelForm from "@/components/AddChannelForm";
 import CompareTable from "@/components/CompareTable";
 import ViewsChart from "@/components/ViewsChart";
@@ -22,8 +23,12 @@ export default async function GroupDetailPage({
   const { id } = await params;
 
   let group;
+  let monthlyComparisonSettings;
   try {
-    group = await getGroupDetails(id);
+    [group, monthlyComparisonSettings] = await Promise.all([
+      getGroupDetails(id),
+      getMonthlyComparisonSettings(),
+    ]);
   } catch (error) {
     console.error("Error fetching group details:", error);
     redirect("/dashboard");
@@ -71,7 +76,7 @@ export default async function GroupDetailPage({
 
       {channels.some((c: any) => c.monthlyStats.length > 0) && (
         <>
-          <MonthlyComparisonTable channels={channels} />
+          <MonthlyComparisonTable channels={channels} initialSettings={monthlyComparisonSettings} />
           <MonthlyViewsChart channels={channels} />
         </>
       )}
