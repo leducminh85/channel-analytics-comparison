@@ -128,11 +128,11 @@ export default function MonthlyViewsChart({
         <button
           type="button"
           onClick={() => setChartVisible((visible) => !visible)}
-          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+          aria-label={chartVisible ? "Ẩn biểu đồ" : "Hiện biểu đồ"}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
           title={chartVisible ? "Ẩn biểu đồ" : "Hiện biểu đồ"}
         >
-          {chartVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          {chartVisible ? "Ẩn" : "Hiện"}
+          {chartVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
       </div>
       {chartVisible && <div className="h-[400px] w-full">

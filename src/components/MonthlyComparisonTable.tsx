@@ -34,12 +34,57 @@ function formatMonthLabel(monthStr: string): string {
   return `${m}/${y}`;
 }
 
-function escapeExcelCell(value: string | number) {
+function escapeXml(value: string | number) {
   return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function getExcelColumnName(index: number) {
+  let columnName = "";
+  let value = index + 1;
+
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    columnName = String.fromCharCode(65 + remainder) + columnName;
+    value = Math.floor((value - 1) / 26);
+  }
+
+  return columnName;
+}
+
+function createWorksheetXml(rows: Array<Array<string | number>>) {
+  const maxColumns = Math.max(...rows.map((row) => row.length), 1);
+  const dimension = `A1:${getExcelColumnName(maxColumns - 1)}${Math.max(rows.length, 1)}`;
+
+  const rowXml = rows
+    .map((row, rowIndex) => {
+      const cells = row
+        .map((cell, cellIndex) => {
+          const ref = `${getExcelColumnName(cellIndex)}${rowIndex + 1}`;
+          const style = rowIndex === 0 ? ' s="1"' : "";
+
+          if (typeof cell === "number" && Number.isFinite(cell)) {
+            return `<c r="${ref}"${style}><v>${cell}</v></c>`;
+          }
+
+          return `<c r="${ref}" t="inlineStr"${style}><is><t>${escapeXml(cell)}</t></is></c>`;
+        })
+        .join("");
+
+      return `<row r="${rowIndex + 1}">${cells}</row>`;
+    })
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <dimension ref="${dimension}"/>
+  <sheetViews><sheetView workbookViewId="0"/></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <sheetData>${rowXml}</sheetData>
+</worksheet>`;
 }
 
 function getMonthYear(monthStr: string | null, fallbackYear: number) {
@@ -362,45 +407,56 @@ export default function MonthlyComparisonTable({
     setActiveMonthPicker(null);
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     const headerCells = ["Kênh", ...visibleMonths.map(formatMonthLabel), "Views 30 ngày"];
     const bodyRows = displayChannels.map((channel) => [
       channel.title,
       ...visibleMonths.map((month) => channelData[channel.id][month] || 0),
       channel.views30Days,
     ]);
+    const rows = [headerCells, ...bodyRows];
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
 
-    const tableRows = [headerCells, ...bodyRows]
-      .map(
-        (row) =>
-          `<tr>${row
-            .map((cell) => `<td>${escapeExcelCell(cell)}</td>`)
-            .join("")}</tr>`
-      )
-      .join("");
+    zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`);
+    zip.folder("_rels")?.file(".rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`);
+    zip.folder("xl")?.file("workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Monthly Views" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`);
+    zip.folder("xl")?.folder("_rels")?.file("workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`);
+    zip.folder("xl")?.file("styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2"><font/><font><b/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border/></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>
+</styleSheet>`);
+    zip.folder("xl")?.folder("worksheets")?.file("sheet1.xml", createWorksheetXml(rows));
 
-    const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <style>
-    table { border-collapse: collapse; }
-    td { border: 1px solid #d9e2ec; padding: 8px; }
-    tr:first-child td { font-weight: 700; background: #f1f5f9; }
-  </style>
-</head>
-<body>
-  <table>${tableRows}</table>
-</body>
-</html>`;
-
-    const blob = new Blob(["\ufeff", html], {
-      type: "application/vnd.ms-excel;charset=utf-8",
+    const blob = await zip.generateAsync({
+      type: "blob",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `monthly-views-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `monthly-views-${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(link);
     link.click();
     link.remove();
