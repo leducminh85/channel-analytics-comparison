@@ -9,14 +9,58 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+export type ChannelImportPreviewStatus =
+  | "ready"
+  | "existing"
+  | "already-in-group"
+  | "duplicate"
+  | "invalid";
+
+export interface ChannelImportPreviewItem {
+  input: string;
+  normalizedUrl: string | null;
+  status: ChannelImportPreviewStatus;
+  message: string;
+  channelId?: string;
+  channelTitle?: string;
+}
+
+export interface ChannelImportResultItem {
+  input: string;
+  status: "added" | "skipped" | "failed";
+  message: string;
+  channelId?: string;
+}
+
 function normalizeYoutubeUrl(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(withProtocol);
     parsed.hash = "";
     parsed.search = "";
     return parsed.toString().replace(/\/$/, "");
   } catch {
-    return url.trim().replace(/\/$/, "");
+    return trimmed.replace(/\/$/, "");
+  }
+}
+
+function isPotentialYoutubeChannelUrl(url: string) {
+  const normalizedUrl = normalizeYoutubeUrl(url);
+
+  try {
+    const parsed = new URL(normalizedUrl);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host !== "youtube.com" && host !== "m.youtube.com") return false;
+    return Boolean(
+      parsed.pathname.match(/^\/channel\/UC[a-zA-Z0-9_-]{22}$/) ||
+        parsed.pathname.match(/^\/@[a-zA-Z0-9._-]+$/)
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -45,6 +89,22 @@ async function findExistingChannelFromUrl(url: string) {
   });
 }
 
+async function linkChannelToGroup(channelId: string, groupId: string) {
+  return prisma.groupChannel.upsert({
+    where: {
+      groupId_channelId: {
+        groupId,
+        channelId,
+      },
+    },
+    update: {},
+    create: {
+      groupId,
+      channelId,
+    },
+  });
+}
+
 /**
  * Add a YouTube channel to a comparison group.
  */
@@ -53,19 +113,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
     const existingChannel = await findExistingChannelFromUrl(url);
 
     if (existingChannel) {
-      await prisma.groupChannel.upsert({
-        where: {
-          groupId_channelId: {
-            groupId,
-            channelId: existingChannel.id,
-          },
-        },
-        update: {},
-        create: {
-          groupId,
-          channelId: existingChannel.id,
-        },
-      });
+      await linkChannelToGroup(existingChannel.id, groupId);
 
       revalidatePath("/dashboard");
       revalidatePath(`/group/${groupId}`);
@@ -84,19 +132,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
     });
 
     if (existingByYoutubeId) {
-      await prisma.groupChannel.upsert({
-        where: {
-          groupId_channelId: {
-            groupId,
-            channelId: existingByYoutubeId.id,
-          },
-        },
-        update: {},
-        create: {
-          groupId,
-          channelId: existingByYoutubeId.id,
-        },
-      });
+      await linkChannelToGroup(existingByYoutubeId.id, groupId);
 
       revalidatePath("/dashboard");
       revalidatePath(`/group/${groupId}`);
@@ -147,19 +183,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
     });
 
     // 4. Link the channel to the selected comparison group.
-    await prisma.groupChannel.upsert({
-      where: {
-        groupId_channelId: {
-          groupId,
-          channelId: channel.id,
-        },
-      },
-      update: {},
-      create: {
-        groupId,
-        channelId: channel.id,
-      },
-    });
+    await linkChannelToGroup(channel.id, groupId);
 
     // 5. Persist VidIQ stats only when the API succeeds.
     if (vidiqData) {
@@ -223,6 +247,130 @@ export async function addChannelToGroup(url: string, groupId: string) {
     console.error("Error in addChannelToGroup:", error);
     throw new Error(getErrorMessage(error, "Đã xảy ra lỗi khi thêm kênh"));
   }
+}
+
+/**
+ * Preview a batch import without fetching new channel data from external APIs.
+ */
+export async function previewChannelsForGroup(inputs: string[], groupId: string) {
+  const seen = new Set<string>();
+  const items: ChannelImportPreviewItem[] = [];
+
+  for (const rawInput of inputs) {
+    const input = rawInput.trim();
+    if (!input) continue;
+
+    const normalizedUrl = normalizeYoutubeUrl(input);
+    if (seen.has(normalizedUrl)) {
+      items.push({
+        input,
+        normalizedUrl,
+        status: "duplicate",
+        message: "URL bị trùng trong danh sách nhập",
+      });
+      continue;
+    }
+
+    seen.add(normalizedUrl);
+
+    if (!isPotentialYoutubeChannelUrl(normalizedUrl)) {
+      items.push({
+        input,
+        normalizedUrl,
+        status: "invalid",
+        message: "Không nhận diện được URL kênh YouTube",
+      });
+      continue;
+    }
+
+    const existingChannel = await findExistingChannelFromUrl(normalizedUrl);
+    if (!existingChannel) {
+      items.push({
+        input,
+        normalizedUrl,
+        status: "ready",
+        message: "Kênh mới, sẽ fetch dữ liệu khi import",
+      });
+      continue;
+    }
+
+    const existingLink = await prisma.groupChannel.findUnique({
+      where: {
+        groupId_channelId: {
+          groupId,
+          channelId: existingChannel.id,
+        },
+      },
+      select: { channelId: true },
+    });
+
+    items.push({
+      input,
+      normalizedUrl,
+      status: existingLink ? "already-in-group" : "existing",
+      message: existingLink
+        ? "Kênh đã có trong group này"
+        : "Kênh đã có trong cơ sở dữ liệu, chỉ cần liên kết vào group",
+      channelId: existingChannel.id,
+      channelTitle: existingChannel.title,
+    });
+  }
+
+  return {
+    total: items.length,
+    importable: items.filter((item) => item.status === "ready" || item.status === "existing").length,
+    items,
+  };
+}
+
+/**
+ * Import multiple YouTube channels into one comparison group.
+ */
+export async function importChannelsToGroup(inputs: string[], groupId: string) {
+  const preview = await previewChannelsForGroup(inputs, groupId);
+  const results: ChannelImportResultItem[] = [];
+
+  for (const item of preview.items) {
+    if (item.status === "already-in-group" || item.status === "duplicate" || item.status === "invalid") {
+      results.push({
+        input: item.input,
+        status: "skipped",
+        message: item.message,
+        channelId: item.channelId,
+      });
+      continue;
+    }
+
+    try {
+      const result = await addChannelToGroup(item.normalizedUrl || item.input, groupId);
+      results.push({
+        input: item.input,
+        status: "added",
+        message:
+          item.status === "existing"
+            ? "Đã thêm từ dữ liệu có sẵn, không fetch lại API"
+            : result.warning || "Đã fetch dữ liệu và thêm kênh",
+        channelId: result.channelId,
+      });
+    } catch (error: unknown) {
+      results.push({
+        input: item.input,
+        status: "failed",
+        message: getErrorMessage(error, "Không thể thêm kênh"),
+      });
+    }
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/group/${groupId}`);
+
+  return {
+    total: results.length,
+    added: results.filter((item) => item.status === "added").length,
+    skipped: results.filter((item) => item.status === "skipped").length,
+    failed: results.filter((item) => item.status === "failed").length,
+    items: results,
+  };
 }
 
 /**
