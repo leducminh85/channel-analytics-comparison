@@ -3,10 +3,40 @@
 import prisma from "@/lib/prisma";
 import { getChannelIdFromUrl, getChannelStats, getUploadFrequency } from "@/lib/services/youtube";
 import { getVidiqStats } from "@/lib/services/vidiq";
+import { authOptions } from "@/lib/auth";
+import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function getErrorLog(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return { message: String(error) };
+}
+
+function logChannelImport(level: "info" | "warn" | "error", event: string, data: Record<string, unknown>) {
+  const payload = {
+    event,
+    at: new Date().toISOString(),
+    ...data,
+  };
+
+  if (level === "error") {
+    console.error("[ChannelImport]", payload);
+  } else if (level === "warn") {
+    console.warn("[ChannelImport]", payload);
+  } else {
+    console.info("[ChannelImport]", payload);
+  }
 }
 
 export type ChannelImportPreviewStatus =
@@ -30,6 +60,49 @@ export interface ChannelImportResultItem {
   status: "added" | "skipped" | "failed";
   message: string;
   channelId?: string;
+}
+
+type ChannelForAdmin = {
+  id: string;
+  channel_id: string;
+  channel_url: string;
+  title: string;
+  logo_url: string | null;
+  subscriberCount: number;
+  videoCount: number;
+  viewCount: bigint;
+  uploadFrequency: string | null;
+  views30Days: bigint;
+  createdAt: Date;
+  updatedAt: Date;
+  _count?: {
+    groups: number;
+  };
+};
+
+async function checkAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as { role?: string } | undefined)?.role !== "ADMIN") {
+    throw new Error("Không có quyền truy cập");
+  }
+}
+
+function serializeAdminChannel(channel: ChannelForAdmin) {
+  return {
+    id: channel.id,
+    channel_id: channel.channel_id,
+    channel_url: channel.channel_url,
+    title: channel.title,
+    logo_url: channel.logo_url,
+    subscriberCount: channel.subscriberCount,
+    videoCount: channel.videoCount,
+    viewCount: Number(channel.viewCount),
+    uploadFrequency: channel.uploadFrequency,
+    views30Days: Number(channel.views30Days),
+    groupsCount: channel._count?.groups ?? 0,
+    createdAt: channel.createdAt.toISOString(),
+    updatedAt: channel.updatedAt.toISOString(),
+  };
 }
 
 function normalizeYoutubeUrl(url: string) {
@@ -105,18 +178,159 @@ async function linkChannelToGroup(channelId: string, groupId: string) {
   });
 }
 
+async function persistVidiqStats(channelId: string, vidiqData: Awaited<ReturnType<typeof getVidiqStats>>) {
+  for (const stat of vidiqData.dailyStats) {
+    await prisma.dailyStat.upsert({
+      where: {
+        channelId_date_str: {
+          channelId,
+          date_str: String(stat.date_str),
+        },
+      },
+      update: {
+        views: stat.views,
+        views_change: stat.views_change,
+        subscribers: stat.subscribers,
+        subscribers_change: stat.subscribers_change,
+      },
+      create: {
+        channelId,
+        date_str: String(stat.date_str),
+        views: stat.views,
+        views_change: stat.views_change,
+        subscribers: stat.subscribers,
+        subscribers_change: stat.subscribers_change,
+      },
+    });
+  }
+
+  for (const monthlyStat of vidiqData.monthlyStats) {
+    await prisma.monthlyStat.upsert({
+      where: {
+        channelId_month: {
+          channelId,
+          month: monthlyStat.month,
+        },
+      },
+      update: {
+        views_gained: monthlyStat.views_gained,
+        total_views: monthlyStat.total_views_at_end,
+        subscribers: monthlyStat.subscribers,
+        subscribers_change: monthlyStat.subscribers_change,
+      },
+      create: {
+        channelId,
+        month: monthlyStat.month,
+        views_gained: monthlyStat.views_gained,
+        total_views: monthlyStat.total_views_at_end,
+        subscribers: monthlyStat.subscribers,
+        subscribers_change: monthlyStat.subscribers_change,
+      },
+    });
+  }
+}
+
+async function revalidateChannelUsage(channelId: string) {
+  const groupLinks = await prisma.groupChannel.findMany({
+    where: { channelId },
+    select: { groupId: true },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  for (const link of groupLinks) {
+    revalidatePath(`/group/${link.groupId}`);
+  }
+}
+
+async function refreshChannelData(channel: {
+  id: string;
+  channel_id: string;
+  channel_url: string;
+  views30Days: bigint;
+}) {
+  const [youtubeStats, uploadFreq] = await Promise.all([
+    getChannelStats(channel.channel_id),
+    getUploadFrequency(channel.channel_id),
+  ]);
+
+  let vidiqData: Awaited<ReturnType<typeof getVidiqStats>> | null = null;
+  let warning: string | undefined;
+
+  try {
+    vidiqData = await getVidiqStats(channel.channel_id);
+  } catch (vidiqError) {
+    console.error("VidIQ fetch failed while refreshing channel:", vidiqError);
+    warning = "Đã cập nhật dữ liệu YouTube, nhưng không lấy được dữ liệu VidIQ.";
+  }
+
+  const updatedChannel = await prisma.channel.update({
+    where: { id: channel.id },
+    data: {
+      title: youtubeStats.title,
+      logo_url: youtubeStats.logo_url,
+      subscriberCount: youtubeStats.subscriberCount,
+      videoCount: youtubeStats.videoCount,
+      viewCount: youtubeStats.viewCount,
+      uploadFrequency: uploadFreq,
+      views30Days: vidiqData?.views30Days ?? channel.views30Days,
+      updatedAt: new Date(),
+    },
+    include: {
+      _count: {
+        select: { groups: true },
+      },
+    },
+  });
+
+  if (vidiqData) {
+    await persistVidiqStats(channel.id, vidiqData);
+  }
+
+  await revalidateChannelUsage(channel.id);
+
+  return {
+    channel: serializeAdminChannel(updatedChannel),
+    warning,
+  };
+}
+
 /**
  * Add a YouTube channel to a comparison group.
  */
 export async function addChannelToGroup(url: string, groupId: string) {
+  const normalizedUrl = normalizeYoutubeUrl(url);
+
+  logChannelImport("info", "add:start", {
+    url,
+    normalizedUrl,
+    groupId,
+  });
+
   try {
     const existingChannel = await findExistingChannelFromUrl(url);
 
     if (existingChannel) {
+      logChannelImport("info", "add:existing-channel-found", {
+        url,
+        normalizedUrl,
+        groupId,
+        dbChannelId: existingChannel.id,
+        youtubeChannelId: existingChannel.channel_id,
+        title: existingChannel.title,
+      });
+
       await linkChannelToGroup(existingChannel.id, groupId);
 
       revalidatePath("/dashboard");
       revalidatePath(`/group/${groupId}`);
+
+      logChannelImport("info", "add:existing-channel-linked", {
+        url,
+        normalizedUrl,
+        groupId,
+        dbChannelId: existingChannel.id,
+      });
 
       return { success: true, channelId: existingChannel.id };
     }
@@ -124,35 +338,100 @@ export async function addChannelToGroup(url: string, groupId: string) {
     // 1. Resolve the YouTube channel ID from the submitted URL.
     const youtubeChannelId = await getChannelIdFromUrl(url);
     if (!youtubeChannelId) {
+      logChannelImport("error", "add:youtube-channel-id-not-resolved", {
+        url,
+        normalizedUrl,
+        groupId,
+        reason: "getChannelIdFromUrl returned null",
+      });
       throw new Error("URL không hợp lệ hoặc không tìm thấy kênh Youtube");
     }
+
+    logChannelImport("info", "add:youtube-channel-id-resolved", {
+      url,
+      normalizedUrl,
+      groupId,
+      youtubeChannelId,
+    });
 
     const existingByYoutubeId = await prisma.channel.findUnique({
       where: { channel_id: youtubeChannelId },
     });
 
     if (existingByYoutubeId) {
+      logChannelImport("info", "add:existing-youtube-id-found", {
+        url,
+        normalizedUrl,
+        groupId,
+        dbChannelId: existingByYoutubeId.id,
+        youtubeChannelId,
+        title: existingByYoutubeId.title,
+      });
+
       await linkChannelToGroup(existingByYoutubeId.id, groupId);
 
       revalidatePath("/dashboard");
       revalidatePath(`/group/${groupId}`);
 
+      logChannelImport("info", "add:existing-youtube-id-linked", {
+        url,
+        normalizedUrl,
+        groupId,
+        dbChannelId: existingByYoutubeId.id,
+        youtubeChannelId,
+      });
+
       return { success: true, channelId: existingByYoutubeId.id };
     }
 
     // 2. YouTube data is required. VidIQ data is best-effort.
+    logChannelImport("info", "add:fetching-channel-data", {
+      url,
+      normalizedUrl,
+      groupId,
+      youtubeChannelId,
+    });
+
     const [youtubeStats, uploadFreq] = await Promise.all([
       getChannelStats(youtubeChannelId),
       getUploadFrequency(youtubeChannelId),
     ]);
+
+    logChannelImport("info", "add:youtube-data-fetched", {
+      url,
+      normalizedUrl,
+      groupId,
+      youtubeChannelId,
+      title: youtubeStats.title,
+      subscriberCount: youtubeStats.subscriberCount,
+      videoCount: youtubeStats.videoCount,
+      viewCount: youtubeStats.viewCount,
+      uploadFrequency: uploadFreq,
+    });
 
     let vidiqData: Awaited<ReturnType<typeof getVidiqStats>> | null = null;
     let warning: string | undefined;
 
     try {
       vidiqData = await getVidiqStats(youtubeChannelId);
+      logChannelImport("info", "add:vidiq-data-fetched", {
+        url,
+        normalizedUrl,
+        groupId,
+        youtubeChannelId,
+        views30Days: vidiqData.views30Days,
+        dailyStatsCount: vidiqData.dailyStats.length,
+        monthlyStatsCount: vidiqData.monthlyStats.length,
+      });
     } catch (vidiqError) {
       console.error("VidIQ fetch failed, channel will be added without VidIQ stats:", vidiqError);
+      logChannelImport("warn", "add:vidiq-data-failed", {
+        url,
+        normalizedUrl,
+        groupId,
+        youtubeChannelId,
+        error: getErrorLog(vidiqError),
+      });
       warning = "Kênh đã được thêm, nhưng không lấy được dữ liệu view từ VidIQ. Các số liệu VidIQ đang được đặt mặc định.";
     }
 
@@ -185,57 +464,27 @@ export async function addChannelToGroup(url: string, groupId: string) {
     // 4. Link the channel to the selected comparison group.
     await linkChannelToGroup(channel.id, groupId);
 
+    logChannelImport("info", "add:channel-upserted-and-linked", {
+      url,
+      normalizedUrl,
+      groupId,
+      dbChannelId: channel.id,
+      youtubeChannelId,
+      title: channel.title,
+    });
+
     // 5. Persist VidIQ stats only when the API succeeds.
     if (vidiqData) {
-      for (const stat of vidiqData.dailyStats) {
-        await prisma.dailyStat.upsert({
-          where: {
-            channelId_date_str: {
-              channelId: channel.id,
-              date_str: String(stat.date_str),
-            },
-          },
-          update: {
-            views: stat.views,
-            views_change: stat.views_change,
-            subscribers: stat.subscribers,
-            subscribers_change: stat.subscribers_change,
-          },
-          create: {
-            channelId: channel.id,
-            date_str: String(stat.date_str),
-            views: stat.views,
-            views_change: stat.views_change,
-            subscribers: stat.subscribers,
-            subscribers_change: stat.subscribers_change,
-          },
-        });
-      }
-
-      for (const monthlyStat of vidiqData.monthlyStats) {
-        await prisma.monthlyStat.upsert({
-          where: {
-            channelId_month: {
-              channelId: channel.id,
-              month: monthlyStat.month,
-            },
-          },
-          update: {
-            views_gained: monthlyStat.views_gained,
-            total_views: monthlyStat.total_views_at_end,
-            subscribers: monthlyStat.subscribers,
-            subscribers_change: monthlyStat.subscribers_change,
-          },
-          create: {
-            channelId: channel.id,
-            month: monthlyStat.month,
-            views_gained: monthlyStat.views_gained,
-            total_views: monthlyStat.total_views_at_end,
-            subscribers: monthlyStat.subscribers,
-            subscribers_change: monthlyStat.subscribers_change,
-          },
-        });
-      }
+      await persistVidiqStats(channel.id, vidiqData);
+      logChannelImport("info", "add:vidiq-stats-persisted", {
+        url,
+        normalizedUrl,
+        groupId,
+        dbChannelId: channel.id,
+        youtubeChannelId,
+        dailyStatsCount: vidiqData.dailyStats.length,
+        monthlyStatsCount: vidiqData.monthlyStats.length,
+      });
     }
 
     // 6. Revalidate cached UI routes that depend on this group.
@@ -244,9 +493,122 @@ export async function addChannelToGroup(url: string, groupId: string) {
 
     return { success: true, channelId: channel.id, warning };
   } catch (error: unknown) {
-    console.error("Error in addChannelToGroup:", error);
+    logChannelImport("error", "add:failed", {
+      url,
+      normalizedUrl,
+      groupId,
+      error: getErrorLog(error),
+    });
     throw new Error(getErrorMessage(error, "Đã xảy ra lỗi khi thêm kênh"));
   }
+}
+
+export async function getAdminChannels() {
+  await checkAdmin();
+
+  const channels = await prisma.channel.findMany({
+    include: {
+      _count: {
+        select: { groups: true },
+      },
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  });
+
+  return channels.map(serializeAdminChannel);
+}
+
+export async function updateAdminChannel(channelId: string) {
+  await checkAdmin();
+
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    select: {
+      id: true,
+      channel_id: true,
+      channel_url: true,
+      views30Days: true,
+    },
+  });
+
+  if (!channel) {
+    throw new Error("Không tìm thấy kênh trong database");
+  }
+
+  return refreshChannelData(channel);
+}
+
+export async function updateAllAdminChannels() {
+  await checkAdmin();
+
+  const channels = await prisma.channel.findMany({
+    select: {
+      id: true,
+      channel_id: true,
+      channel_url: true,
+      title: true,
+      views30Days: true,
+    },
+    orderBy: {
+      updatedAt: "asc",
+    },
+  });
+
+  let updated = 0;
+  const failed: Array<{ channelId: string; title: string; message: string }> = [];
+
+  for (const channel of channels) {
+    try {
+      await refreshChannelData(channel);
+      updated += 1;
+    } catch (error: unknown) {
+      failed.push({
+        channelId: channel.id,
+        title: channel.title,
+        message: getErrorMessage(error, "Không thể cập nhật kênh"),
+      });
+    }
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+
+  return {
+    total: channels.length,
+    updated,
+    failed,
+  };
+}
+
+export async function deleteAdminChannel(channelId: string) {
+  await checkAdmin();
+
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    include: {
+      groups: {
+        select: { groupId: true },
+      },
+    },
+  });
+
+  if (!channel) {
+    throw new Error("Không tìm thấy kênh trong database");
+  }
+
+  await prisma.channel.delete({
+    where: { id: channelId },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  for (const link of channel.groups) {
+    revalidatePath(`/group/${link.groupId}`);
+  }
+
+  return { success: true };
 }
 
 /**
@@ -353,6 +715,13 @@ export async function importChannelsToGroup(inputs: string[], groupId: string) {
         channelId: result.channelId,
       });
     } catch (error: unknown) {
+      logChannelImport("error", "batch:item-failed", {
+        groupId,
+        input: item.input,
+        normalizedUrl: item.normalizedUrl,
+        previewStatus: item.status,
+        error: getErrorLog(error),
+      });
       results.push({
         input: item.input,
         status: "failed",

@@ -111,7 +111,7 @@ export function calculateMonthlyStats(monthlyRaw: VidiqMonthlyRawStat[], current
 }
 
 async function fetchVidiqStatsWithToken(channelId: string, token: string, tokenLabel: string) {
-  const url = `https://api.vidiq.com/youtube/channels/public/channel-pages/${channelId}?days=730`;
+  const url = `https://api.vidiq.com/youtube/channels/public/channel-pages/${channelId}`;
 
   const response = await fetch(url, {
     headers: {
