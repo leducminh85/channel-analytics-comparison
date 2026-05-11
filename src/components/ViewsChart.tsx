@@ -10,7 +10,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { TrendingUp } from "lucide-react";
+import { Eye, EyeOff, TrendingUp } from "lucide-react";
+import { useState } from "react";
 
 interface DailyStat {
   date_str: string;
@@ -101,6 +102,7 @@ export default function ViewsChart({
 }: {
   channels: ChannelWithStats[];
 }) {
+  const [chartVisible, setChartVisible] = useState(true);
   const hasDailyStats = channels.some((channel) => channel.dailyStats.length > 0);
 
   if (channels.length === 0 || !hasDailyStats) {
@@ -137,11 +139,22 @@ export default function ViewsChart({
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
-        <TrendingUp className="h-4 w-4 text-indigo-500" />
-        {"So s\u00e1nh Views t\u0103ng th\u00eam h\u00e0ng ng\u00e0y"}
-      </h3>
-      <div className="h-[400px] w-full">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <TrendingUp className="h-4 w-4 text-indigo-500" />
+          {"So s\u00e1nh Views t\u0103ng th\u00eam h\u00e0ng ng\u00e0y"}
+        </h3>
+        <button
+          type="button"
+          onClick={() => setChartVisible((visible) => !visible)}
+          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+          title={chartVisible ? "Ẩn biểu đồ" : "Hiện biểu đồ"}
+        >
+          {chartVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          {chartVisible ? "Ẩn" : "Hiện"}
+        </button>
+      </div>
+      {chartVisible && <div className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={chartData}
@@ -184,7 +197,7 @@ export default function ViewsChart({
             ))}
           </LineChart>
         </ResponsiveContainer>
-      </div>
+      </div>}
     </div>
   );
 }

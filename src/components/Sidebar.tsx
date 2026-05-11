@@ -9,7 +9,9 @@ import {
   ChevronRight,
   CirclePlay,
   Shield,
+  PanelLeftClose,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import * as LucideIcons from "lucide-react";
 import { ICON_COLORS } from "@/lib/iconMap";
@@ -20,10 +22,20 @@ interface CompareGroup {
   icon?: string | null;
 }
 
-export default function Sidebar({ groups }: { groups: CompareGroup[] }) {
+type SessionUserWithRole = {
+  role?: string;
+};
+
+export default function Sidebar({
+  groups,
+  onToggle,
+}: {
+  groups: CompareGroup[];
+  onToggle?: () => void;
+}) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const isAdmin = (session?.user as SessionUserWithRole | undefined)?.role === "ADMIN";
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar-bg text-sidebar-fg">
@@ -32,12 +44,22 @@ export default function Sidebar({ groups }: { groups: CompareGroup[] }) {
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-accent">
           <CirclePlay className="h-5 w-5 text-white" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-base font-bold tracking-tight text-white">
             Channel Compare
           </h1>
           <p className="text-[11px] text-slate-400">Youtube Analytics</p>
         </div>
+        {onToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+            title="Ẩn sidebar"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -84,8 +106,11 @@ export default function Sidebar({ groups }: { groups: CompareGroup[] }) {
               const isActive = pathname === `/group/${group.id}`;
               
               // Resolve dynamic icon
-              // @ts-ignore
-              const DynamicIcon = group.icon ? LucideIcons[group.icon] || GitCompareArrows : GitCompareArrows;
+              const iconName = group.icon as keyof typeof LucideIcons | undefined;
+              const DynamicIcon: LucideIcon =
+                iconName && LucideIcons[iconName]
+                  ? (LucideIcons[iconName] as LucideIcon)
+                  : GitCompareArrows;
               const gradientClass = group.icon && ICON_COLORS[group.icon] 
                 ? ICON_COLORS[group.icon] 
                 : "from-indigo-500 to-violet-500";

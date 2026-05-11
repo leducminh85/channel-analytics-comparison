@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Calendar, ChevronDown, ChevronUp, ChevronsUpDown, Filter } from "lucide-react";
+import { Calendar, ChevronDown, ChevronUp, ChevronsUpDown, Download, Filter } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   updateMonthlyComparisonSettings,
@@ -32,6 +32,14 @@ function formatMonthLabel(monthStr: string): string {
   // input: YYYY-MM -> output: MM/YYYY
   const [y, m] = monthStr.split("-");
   return `${m}/${y}`;
+}
+
+function escapeExcelCell(value: string | number) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function getMonthYear(monthStr: string | null, fallbackYear: number) {
@@ -354,6 +362,51 @@ export default function MonthlyComparisonTable({
     setActiveMonthPicker(null);
   };
 
+  const exportExcel = () => {
+    const headerCells = ["Kênh", ...visibleMonths.map(formatMonthLabel), "Views 30 ngày"];
+    const bodyRows = displayChannels.map((channel) => [
+      channel.title,
+      ...visibleMonths.map((month) => channelData[channel.id][month] || 0),
+      channel.views30Days,
+    ]);
+
+    const tableRows = [headerCells, ...bodyRows]
+      .map(
+        (row) =>
+          `<tr>${row
+            .map((cell) => `<td>${escapeExcelCell(cell)}</td>`)
+            .join("")}</tr>`
+      )
+      .join("");
+
+    const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    table { border-collapse: collapse; }
+    td { border: 1px solid #d9e2ec; padding: 8px; }
+    tr:first-child td { font-weight: 700; background: #f1f5f9; }
+  </style>
+</head>
+<body>
+  <table>${tableRows}</table>
+</body>
+</html>`;
+
+    const blob = new Blob(["\ufeff", html], {
+      type: "application/vnd.ms-excel;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `monthly-views-${new Date().toISOString().slice(0, 10)}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   if (channels.length === 0) return null;
 
   return (
@@ -363,73 +416,83 @@ export default function MonthlyComparisonTable({
           <Calendar className="h-4 w-4 text-indigo-500" />
           <h3 className="text-sm font-semibold text-slate-700">So sánh Views theo tháng (Gained)</h3>
         </div>
-        <div ref={filterRef} className="relative">
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setShowFilters((value) => !value)}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+            onClick={exportExcel}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
           >
-            <Filter className="h-3.5 w-3.5" />
-            {getFilterLabel()}
+            <Download className="h-3.5 w-3.5" />
+            Export Excel
           </button>
+          <div ref={filterRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowFilters((value) => !value)}
+              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              {getFilterLabel()}
+            </button>
 
-          {showFilters && (
-            <div className="absolute right-0 top-10 z-30 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { mode: "all", label: "Tất cả" },
-                  { mode: "last3", label: "3 tháng" },
-                  { mode: "last6", label: "6 tháng" },
-                  { mode: "custom", label: "Tùy chọn" },
-                ].map((option) => (
-                  <button
-                    key={option.mode}
-                    type="button"
-                    onClick={() =>
-                      updateFilter({
-                        filterMode: option.mode as MonthlyComparisonSettings["filterMode"],
-                      })
-                    }
-                    className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                      settings.filterMode === option.mode
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-
-              {settings.filterMode === "custom" && (
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <MonthPickerField
-                    label="Từ tháng"
-                    value={settings.customStartMonth}
-                    minMonth={minAvailableMonth}
-                    maxMonth={settings.customEndMonth || maxAvailableMonth}
-                    isOpen={activeMonthPicker === "start"}
-                    displayYear={startPickerYear}
-                    onOpen={() => openMonthPicker("start")}
-                    onYearChange={setStartPickerYear}
-                    onChange={(month) => updateCustomMonth("customStartMonth", month)}
-                  />
-                  <MonthPickerField
-                    label="Đến tháng"
-                    value={settings.customEndMonth}
-                    minMonth={settings.customStartMonth || minAvailableMonth}
-                    maxMonth={maxAvailableMonth}
-                    isOpen={activeMonthPicker === "end"}
-                    displayYear={endPickerYear}
-                    panelAlign="right"
-                    onOpen={() => openMonthPicker("end")}
-                    onYearChange={setEndPickerYear}
-                    onChange={(month) => updateCustomMonth("customEndMonth", month)}
-                  />
+            {showFilters && (
+              <div className="absolute right-0 top-10 z-30 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { mode: "all", label: "Tất cả" },
+                    { mode: "last3", label: "3 tháng" },
+                    { mode: "last6", label: "6 tháng" },
+                    { mode: "custom", label: "Tùy chọn" },
+                  ].map((option) => (
+                    <button
+                      key={option.mode}
+                      type="button"
+                      onClick={() =>
+                        updateFilter({
+                          filterMode: option.mode as MonthlyComparisonSettings["filterMode"],
+                        })
+                      }
+                      className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                        settings.filterMode === option.mode
+                          ? "bg-indigo-600 text-white"
+                          : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
-          )}
+
+                {settings.filterMode === "custom" && (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <MonthPickerField
+                      label="Từ tháng"
+                      value={settings.customStartMonth}
+                      minMonth={minAvailableMonth}
+                      maxMonth={settings.customEndMonth || maxAvailableMonth}
+                      isOpen={activeMonthPicker === "start"}
+                      displayYear={startPickerYear}
+                      onOpen={() => openMonthPicker("start")}
+                      onYearChange={setStartPickerYear}
+                      onChange={(month) => updateCustomMonth("customStartMonth", month)}
+                    />
+                    <MonthPickerField
+                      label="Đến tháng"
+                      value={settings.customEndMonth}
+                      minMonth={settings.customStartMonth || minAvailableMonth}
+                      maxMonth={maxAvailableMonth}
+                      isOpen={activeMonthPicker === "end"}
+                      displayYear={endPickerYear}
+                      panelAlign="right"
+                      onOpen={() => openMonthPicker("end")}
+                      onYearChange={setEndPickerYear}
+                      onChange={(month) => updateCustomMonth("customEndMonth", month)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       

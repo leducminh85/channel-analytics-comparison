@@ -10,7 +10,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 
 interface MonthlyStat {
   month: string;
@@ -21,6 +22,12 @@ interface ChannelWithStats {
   id: string;
   title: string;
   monthlyStats: MonthlyStat[];
+}
+
+interface TooltipEntry {
+  color?: string;
+  name?: string;
+  value?: number | string;
 }
 
 const COLORS = [
@@ -49,11 +56,45 @@ function formatMonthLabel(monthStr: string): string {
   return `${m}/${y}`;
 }
 
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+      <p className="mb-2 text-xs font-semibold text-slate-500">Tháng {label}</p>
+      <div className="space-y-1.5">
+        {payload.map((entry, index) => (
+          <div key={`${entry.name || "series"}-${index}`} className="flex items-center gap-2 text-xs">
+            <div
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="text-slate-600">{entry.name}:</span>
+            <span className="font-semibold text-slate-900">
+              +{formatNumber(Number(entry.value ?? 0))}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function MonthlyViewsChart({
   channels,
 }: {
   channels: ChannelWithStats[];
 }) {
+  const [chartVisible, setChartVisible] = useState(true);
+
   if (channels.length === 0) return null;
 
   // Group views by month and channel
@@ -77,36 +118,24 @@ export default function MonthlyViewsChart({
     ...monthlyDataMap[month],
   }));
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload) return null;
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-        <p className="mb-2 text-xs font-semibold text-slate-500">Tháng {label}</p>
-        <div className="space-y-1.5">
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 text-xs">
-              <div
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: entry.color }}
-              />
-              <span className="text-slate-600">{entry.name}:</span>
-              <span className="font-semibold text-slate-900">
-                +{formatNumber(entry.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm mt-8">
-      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
-        <BarChart3 className="h-4 w-4 text-indigo-500" />
-        Biểu đồ Views theo tháng
-      </h3>
-      <div className="h-[400px] w-full">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <BarChart3 className="h-4 w-4 text-indigo-500" />
+          Biểu đồ Views theo tháng
+        </h3>
+        <button
+          type="button"
+          onClick={() => setChartVisible((visible) => !visible)}
+          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+          title={chartVisible ? "Ẩn biểu đồ" : "Hiện biểu đồ"}
+        >
+          {chartVisible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          {chartVisible ? "Ẩn" : "Hiện"}
+        </button>
+      </div>
+      {chartVisible && <div className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
@@ -144,7 +173,7 @@ export default function MonthlyViewsChart({
             ))}
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </div>}
     </div>
   );
 }
