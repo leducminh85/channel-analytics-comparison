@@ -17,6 +17,7 @@ interface ChannelWithStats {
   id: string;
   title: string;
   logo_url: string | null;
+  views30Days: number;
   monthlyStats: MonthlyStat[];
 }
 
@@ -184,6 +185,8 @@ export default function MonthlyComparisonTable({
   const [settings, setSettings] = useState<MonthlyComparisonSettings>(initialSettings);
   const [showFilters, setShowFilters] = useState(false);
   const [activeMonthPicker, setActiveMonthPicker] = useState<"start" | "end" | null>(null);
+  const [views30DaysSortDirection, setViews30DaysSortDirection] =
+    useState<MonthlyComparisonSettings["sortDirection"]>(null);
   const [startPickerYear, setStartPickerYear] = useState(() =>
     getMonthYear(initialSettings.customStartMonth, new Date().getFullYear())
   );
@@ -237,6 +240,7 @@ export default function MonthlyComparisonTable({
     });
 
     const allMonths = Array.from(allMonthsSet).sort((a, b) => a.localeCompare(b));
+    const latestMonth = allMonths[allMonths.length - 1];
     let months = allMonths;
 
     if (settings.filterMode === "last3" || settings.filterMode === "last6") {
@@ -252,11 +256,20 @@ export default function MonthlyComparisonTable({
       });
     }
 
+    months = latestMonth ? months.filter((month) => month !== latestMonth) : months;
+
+    const views30DaysSortIsActive = Boolean(views30DaysSortDirection);
     const sortMonthIsVisible = Boolean(
       settings.sortMonth && settings.sortDirection && months.includes(settings.sortMonth)
     );
 
-    const rows = sortMonthIsVisible
+    const rows = views30DaysSortIsActive
+      ? [...channels].sort((a, b) => {
+          return views30DaysSortDirection === "asc"
+            ? a.views30Days - b.views30Days
+            : b.views30Days - a.views30Days;
+        })
+      : sortMonthIsVisible
       ? [...channels].sort((a, b) => {
           const aValue = data[a.id]?.[settings.sortMonth as string] || 0;
           const bValue = data[b.id]?.[settings.sortMonth as string] || 0;
@@ -270,9 +283,11 @@ export default function MonthlyComparisonTable({
       visibleMonths: months,
       displayChannels: rows,
     };
-  }, [channels, settings]);
+  }, [channels, settings, views30DaysSortDirection]);
 
   const handleSortMonth = (month: string) => {
+    setViews30DaysSortDirection(null);
+
     const nextDirection =
       settings.sortMonth !== month
         ? "desc"
@@ -287,6 +302,25 @@ export default function MonthlyComparisonTable({
       sortMonth: nextDirection ? month : null,
       sortDirection: nextDirection,
     });
+  };
+
+  const handleSortViews30Days = () => {
+    const nextDirection =
+      views30DaysSortDirection === null
+        ? "desc"
+        : views30DaysSortDirection === "desc"
+          ? "asc"
+          : null;
+
+    setViews30DaysSortDirection(nextDirection);
+
+    if (nextDirection) {
+      saveSettings({
+        ...settings,
+        sortMonth: null,
+        sortDirection: null,
+      });
+    }
   };
 
   const updateFilter = (nextSettings: Partial<MonthlyComparisonSettings>) => {
@@ -410,7 +444,7 @@ export default function MonthlyComparisonTable({
                 Kênh
               </th>
               {visibleMonths.map((month) => (
-                <th key={month} className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 min-w-[100px] border-r border-slate-100 last:border-r-0">
+                <th key={month} className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 min-w-[100px] border-r border-slate-100">
                   <button
                     type="button"
                     onClick={() => handleSortMonth(month)}
@@ -428,6 +462,23 @@ export default function MonthlyComparisonTable({
                   </button>
                 </th>
               ))}
+              <th className="px-5 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 min-w-[120px]">
+                <button
+                  type="button"
+                  onClick={handleSortViews30Days}
+                  className="mx-auto flex items-center justify-center gap-1 rounded-md px-2 py-1 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+                  title="Sắp xếp theo Views 30 ngày"
+                >
+                  Views 30 ngày
+                  {views30DaysSortDirection === "desc" ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-indigo-600" />
+                  ) : views30DaysSortDirection === "asc" ? (
+                    <ChevronUp className="h-3.5 w-3.5 text-indigo-600" />
+                  ) : (
+                    <ChevronsUpDown className="h-3.5 w-3.5 text-slate-300" />
+                  )}
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -446,7 +497,7 @@ export default function MonthlyComparisonTable({
                 {visibleMonths.map((month) => {
                   const gained = channelData[channel.id][month] || 0;
                   return (
-                    <td key={month} className="px-5 py-4 text-center font-mono text-slate-600 border-r border-slate-50 last:border-r-0">
+                    <td key={month} className="px-5 py-4 text-center font-mono text-slate-600 border-r border-slate-50">
                       {gained > 0 ? (
                         <span className="text-indigo-600 font-bold">+{formatNumber(gained)}</span>
                       ) : (
@@ -455,15 +506,15 @@ export default function MonthlyComparisonTable({
                     </td>
                   );
                 })}
-              </tr>
-            ))}
-            {visibleMonths.length === 0 && (
-              <tr>
-                <td className="px-5 py-8 text-center text-sm text-slate-400" colSpan={2}>
-                  Không có dữ liệu trong khoảng thời gian đã chọn
+                <td className="px-5 py-4 text-center font-mono text-slate-600">
+                  {channel.views30Days > 0 ? (
+                    <span className="font-bold text-emerald-600">+{formatNumber(channel.views30Days)}</span>
+                  ) : (
+                    <span className="text-slate-300">0</span>
+                  )}
                 </td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
       </div>
