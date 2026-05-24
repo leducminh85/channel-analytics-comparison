@@ -2,7 +2,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getGroupDetails } from "@/app/actions/groupActions";
-import { getMonthlyComparisonSettings } from "@/app/actions/monthlyComparisonSettingsActions";
+import {
+  getMonthlyComparisonSettings,
+  type MonthlyComparisonSettings,
+} from "@/app/actions/monthlyComparisonSettingsActions";
 import AddChannelForm from "@/components/AddChannelForm";
 import CompareTable from "@/components/CompareTable";
 import ViewsChart from "@/components/ViewsChart";
@@ -11,6 +14,43 @@ import MonthlyViewsChart from "@/components/MonthlyViewsChart";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import GroupActionMenu from "@/components/GroupActionMenu";
+import CompareGroupChatbot from "@/components/CompareGroupChatbot";
+
+type DailyStat = {
+  date_str: string;
+  views: number;
+  views_change: number;
+  subscribers: number;
+  subscribers_change: number;
+};
+
+type MonthlyStat = {
+  month: string;
+  views_gained: number;
+};
+
+type Channel = {
+  id: string;
+  channel_id: string;
+  channel_url: string;
+  title: string;
+  logo_url: string | null;
+  subscriberCount: number;
+  videoCount: number;
+  viewCount: number;
+  uploadFrequency: string | null;
+  views30Days: number;
+  dailyStats?: DailyStat[];
+  monthlyStats?: MonthlyStat[];
+};
+
+type CompareGroupDetails = {
+  name: string;
+  icon: string | null;
+  channels?: Array<{
+    channel: Channel;
+  }>;
+};
 
 export default async function GroupDetailPage({
   params,
@@ -22,13 +62,16 @@ export default async function GroupDetailPage({
 
   const { id } = await params;
 
-  let group;
-  let monthlyComparisonSettings;
+  let group: CompareGroupDetails;
+  let monthlyComparisonSettings: MonthlyComparisonSettings;
   try {
-    [group, monthlyComparisonSettings] = await Promise.all([
+    const result = await Promise.all([
       getGroupDetails(id),
       getMonthlyComparisonSettings(),
     ]);
+
+    group = result[0] as CompareGroupDetails;
+    monthlyComparisonSettings = result[1];
   } catch (error) {
     console.error("Error fetching group details:", error);
     redirect("/dashboard");
@@ -38,7 +81,7 @@ export default async function GroupDetailPage({
     redirect("/dashboard");
   }
 
-  const channels = (group.channels || []).map((gc: any) => ({
+  const channels = (group.channels || []).map((gc) => ({
     ...gc.channel,
     dailyStats: gc.channel.dailyStats || [],
     monthlyStats: gc.channel.monthlyStats || [],
@@ -74,12 +117,14 @@ export default async function GroupDetailPage({
       <CompareTable channels={channels} groupId={id} />
       <ViewsChart channels={channels} />
 
-      {channels.some((c: any) => c.monthlyStats.length > 0) && (
+      {channels.some((channel) => channel.monthlyStats.length > 0) && (
         <>
           <MonthlyComparisonTable channels={channels} initialSettings={monthlyComparisonSettings} />
           <MonthlyViewsChart channels={channels} />
         </>
       )}
+
+      <CompareGroupChatbot groupId={id} />
     </div>
   );
 }
