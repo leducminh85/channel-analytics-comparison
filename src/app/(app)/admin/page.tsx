@@ -29,6 +29,7 @@ import {
   Video,
   X,
 } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface AdminUser {
   id: string;
@@ -54,6 +55,12 @@ interface AdminChannel {
   updatedAt: string;
 }
 
+type ConfirmState =
+  | { type: "delete-user"; user: AdminUser }
+  | { type: "update-all-channels" }
+  | { type: "delete-channel"; channel: AdminChannel }
+  | null;
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -75,6 +82,7 @@ export default function AdminPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"create" | "reset">("create");
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
   const [updatingAllChannels, setUpdatingAllChannels] = useState(false);
   const [updatingChannelIds, setUpdatingChannelIds] = useState<Record<string, boolean>>({});
 
@@ -108,7 +116,7 @@ export default function AdminPage() {
       const data = await getAdminChannels();
       setChannels(data);
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể tải danh sách channel") });
+      setMessage({ type: "error", text: getErrorMessage(error, "Không thể tải danh sách kênh") });
     } finally {
       setLoadingChannels(false);
     }
@@ -151,14 +159,18 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteUser = async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xoá tài khoản này?")) return;
-
+  const handleDeleteUser = async (user: AdminUser) => {
+    setSubmitting(true);
+    setMessage(null);
     try {
-      await deleteUser(id);
-      fetchUsers();
+      await deleteUser(user.id);
+      await fetchUsers();
+      setConfirmState(null);
+      setMessage({ type: "success", text: `Đã xoá tài khoản ${user.email || user.name || ""}` });
     } catch (error: unknown) {
       setMessage({ type: "error", text: getErrorMessage(error, "Không thể xoá tài khoản") });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -188,12 +200,10 @@ export default function AdminPage() {
 
   const handleUpdateAllChannels = async () => {
     if (channels.length === 0) return;
-    if (!confirm(`Cập nhật toàn bộ ${channels.length} kênh? Thao tác này sẽ gọi YouTube/VidIQ API.`)) {
-      return;
-    }
 
     setUpdatingAllChannels(true);
     setMessage(null);
+    setConfirmState(null);
 
     try {
       const result = await updateAllAdminChannels();
@@ -220,19 +230,22 @@ export default function AdminPage() {
   };
 
   const handleDeleteChannel = async (channel: AdminChannel) => {
-    const confirmed = confirm(
-      `Xóa kênh "${channel.title}" khỏi database? Kênh này cũng sẽ bị gỡ khỏi mọi group đang liên kết.`
-    );
-    if (!confirmed) return;
-
+    setUpdatingChannelIds((current) => ({ ...current, [channel.id]: true }));
     setMessage(null);
 
     try {
       await deleteAdminChannel(channel.id);
       setChannels((current) => current.filter((item) => item.id !== channel.id));
+      setConfirmState(null);
       setMessage({ type: "success", text: `Đã xóa kênh ${channel.title}` });
     } catch (error: unknown) {
       setMessage({ type: "error", text: getErrorMessage(error, "Không thể xóa kênh") });
+    } finally {
+      setUpdatingChannelIds((current) => {
+        const next = { ...current };
+        delete next[channel.id];
+        return next;
+      });
     }
   };
 
@@ -273,7 +286,7 @@ export default function AdminPage() {
             <Shield className="text-indigo-600" />
             Quản trị hệ thống
           </h1>
-          <p className="mt-1 text-slate-500">Quản lý người dùng, phân quyền và dữ liệu channel</p>
+          <p className="mt-1 text-slate-500">Quản lý người dùng, phân quyền và dữ liệu kênh</p>
         </div>
         <button
           onClick={() => {
@@ -308,7 +321,7 @@ export default function AdminPage() {
           <div>
             <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
               <Users className="h-5 w-5 text-indigo-600" />
-              Quản lý user
+              Quản lý người dùng
             </h2>
             <p className="mt-1 text-sm text-slate-500">Tổng cộng {users.length} người dùng</p>
           </div>
@@ -393,7 +406,7 @@ export default function AdminPage() {
                             <Key size={18} />
                           </button>
                           <button
-                            onClick={() => handleDeleteUser(user.id)}
+                            onClick={() => setConfirmState({ type: "delete-user", user })}
                             className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
                             title="Xoá tài khoản"
                           >
@@ -416,23 +429,23 @@ export default function AdminPage() {
           <div>
             <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
               <Database className="h-5 w-5 text-indigo-600" />
-              Quản lý channel
+              Quản lý kênh
             </h2>
-            <p className="mt-1 text-sm text-slate-500">Tổng cộng {channels.length} kênh trong database</p>
+            <p className="mt-1 text-sm text-slate-500">Tổng cộng {channels.length} kênh trong hệ thống</p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative w-full sm:w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input
                 type="text"
-                placeholder="Tìm theo tên, URL hoặc channel ID..."
+                placeholder="Tìm theo tên, đường dẫn hoặc mã kênh..."
                 className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 value={channelSearchTerm}
                 onChange={(event) => setChannelSearchTerm(event.target.value)}
               />
             </div>
             <button
-              onClick={handleUpdateAllChannels}
+              onClick={() => setConfirmState({ type: "update-all-channels" })}
               disabled={updatingAllChannels || loadingChannels || channels.length === 0}
               className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -521,7 +534,7 @@ export default function AdminPage() {
                               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                                 <span>{channel.channel_id}</span>
                                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
-                                  {channel.groupsCount} group
+                                  {channel.groupsCount} nhóm
                                 </span>
                               </div>
                             </div>
@@ -572,10 +585,10 @@ export default function AdminPage() {
                               )}
                             </button>
                             <button
-                              onClick={() => handleDeleteChannel(channel)}
+                              onClick={() => setConfirmState({ type: "delete-channel", channel })}
                               disabled={updatingAllChannels}
                               className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Xóa khỏi database"
+                              title="Xóa khỏi hệ thống"
                             >
                               <Trash2 size={18} />
                             </button>
@@ -587,7 +600,7 @@ export default function AdminPage() {
             </tbody>
           </table>
           {!loadingChannels && filteredChannels.length === 0 && (
-            <div className="p-12 text-center text-slate-500">Không tìm thấy channel nào phù hợp</div>
+            <div className="p-12 text-center text-slate-500">Không tìm thấy kênh nào phù hợp</div>
           )}
         </div>
       </section>
@@ -698,6 +711,49 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirmState !== null}
+        onClose={() => setConfirmState(null)}
+        onConfirm={() => {
+          if (!confirmState) return;
+          if (confirmState.type === "delete-user") {
+            void handleDeleteUser(confirmState.user);
+            return;
+          }
+          if (confirmState.type === "update-all-channels") {
+            void handleUpdateAllChannels();
+            return;
+          }
+          void handleDeleteChannel(confirmState.channel);
+        }}
+        isLoading={
+          submitting ||
+          updatingAllChannels ||
+          (confirmState?.type === "delete-channel" &&
+            Boolean(updatingChannelIds[confirmState.channel.id]))
+        }
+        title={
+          confirmState?.type === "delete-user"
+            ? "Xoá tài khoản"
+            : confirmState?.type === "update-all-channels"
+              ? "Cập nhật toàn bộ kênh"
+              : "Xoá kênh"
+        }
+        description={
+          confirmState?.type === "delete-user"
+            ? `Bạn có chắc chắn muốn xoá tài khoản "${confirmState.user.email || confirmState.user.name}"?`
+            : confirmState?.type === "update-all-channels"
+              ? `Cập nhật toàn bộ ${channels.length} kênh? Quá trình này sẽ lấy dữ liệu mới và cách nhau khoảng 3 giây cho mỗi kênh.`
+              : confirmState?.type === "delete-channel"
+                ? `Xóa kênh "${confirmState.channel.title}" khỏi hệ thống? Kênh này cũng sẽ bị gỡ khỏi mọi nhóm đang liên kết.`
+                : ""
+        }
+        confirmText={
+          confirmState?.type === "update-all-channels" ? "Cập nhật" : "Xác nhận xoá"
+        }
+        isDestructive={confirmState?.type !== "update-all-channels"}
+      />
     </div>
   );
 }

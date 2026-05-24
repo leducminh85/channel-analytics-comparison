@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -16,8 +16,10 @@ import { importChannelsToGroup } from "@/app/actions/channelActions";
 
 type ImportMode = "text" | "image" | "excel";
 
+const CHANNEL_IMPORT_DELAY_MS = 3000;
+
 const modeOptions: Array<{ mode: ImportMode; label: string; icon: typeof LinkIcon }> = [
-  { mode: "text", label: "Dán URL", icon: LinkIcon },
+  { mode: "text", label: "Dán đường dẫn", icon: LinkIcon },
   { mode: "image", label: "Ảnh", icon: ImageIcon },
   { mode: "excel", label: "Excel", icon: FileSpreadsheet },
 ];
@@ -26,9 +28,13 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function summarizeDetails(details: string[]) {
   const visibleDetails = details.slice(0, 3).join("; ");
-  return details.length > 3 ? `${visibleDetails}; và ${details.length - 3} link khác` : visibleDetails;
+  return details.length > 3 ? `${visibleDetails}; và ${details.length - 3} đường dẫn khác` : visibleDetails;
 }
 
 function extractYoutubeUrls(text: string) {
@@ -142,17 +148,17 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
       ? Boolean(excelFile) && !isBusy
       : activeUrls.length > 0 && !isBusy;
 
-  const resetFeedback = () => {
+  const resetFeedback = useCallback(() => {
     setError("");
     setNotice("");
     setProgressMessage("");
-  };
+  }, []);
 
-  const setTextAndUrls = (text: string, nextUrls?: string[]) => {
+  const setTextAndUrls = useCallback((text: string, nextUrls?: string[]) => {
     setRawText(text);
     setUrls(nextUrls || []);
     resetFeedback();
-  };
+  }, [resetFeedback]);
 
   const resetInputsForMode = (nextMode: ImportMode) => {
     setMode(nextMode);
@@ -164,7 +170,7 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
 
   const importUrlsSequentially = async (nextUrls: string[]) => {
     const uniqueUrls = Array.from(new Set(nextUrls.map((url) => url.trim()).filter(Boolean)));
-    if (uniqueUrls.length === 0) throw new Error("Không tìm thấy URL kênh YouTube để import");
+    if (uniqueUrls.length === 0) throw new Error("Không tìm thấy đường dẫn kênh YouTube để thêm");
 
     let added = 0;
     let skipped = 0;
@@ -173,6 +179,11 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
     const failedDetails: string[] = [];
 
     for (const [index, url] of uniqueUrls.entries()) {
+      if (index > 0) {
+        setProgressMessage(`Đợi 3 giây trước khi xử lý kênh tiếp theo...`);
+        await delay(CHANNEL_IMPORT_DELAY_MS);
+      }
+
       setProgressMessage(`Đang xử lý ${index + 1}/${uniqueUrls.length}: ${url}`);
 
       try {
@@ -213,7 +224,7 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
 
         setProgressMessage(`Đang đọc file: ${excelFile.name}`);
         const excelUrls = await extractYoutubeUrlsFromSpreadsheet(excelFile);
-        if (excelUrls.length === 0) throw new Error("Không tìm thấy URL kênh YouTube trong file");
+        if (excelUrls.length === 0) throw new Error("Không tìm thấy đường dẫn kênh YouTube trong file");
 
         await importUrlsSequentially(excelUrls);
         setExcelFile(null);
@@ -229,13 +240,13 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
         setUrls([]);
       }
     } catch (error: unknown) {
-      setError(getErrorMessage(error, "Không thể import danh sách kênh"));
+      setError(getErrorMessage(error, "Không thể thêm danh sách kênh"));
     } finally {
       setIsImporting(false);
     }
   };
 
-  const handleImageFile = async (file: File | null) => {
+  const handleImageFile = useCallback(async (file: File | null) => {
     if (!file) return;
     setMode("image");
     setIsParsingImage(true);
@@ -255,15 +266,15 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
       const nextUrls = extractYoutubeUrls(text);
       setTextAndUrls(nextUrls.join("\n"), nextUrls);
       if (nextUrls.length === 0) {
-        setError("Không tìm thấy URL kênh YouTube trong ảnh");
+        setError("Không tìm thấy đường dẫn kênh YouTube trong ảnh");
       }
     } catch (error: unknown) {
-      setError(getErrorMessage(error, "Không thể đọc URL từ ảnh"));
+      setError(getErrorMessage(error, "Không thể đọc đường dẫn từ ảnh"));
     } finally {
       setIsParsingImage(false);
       setOcrProgress(null);
     }
-  };
+  }, [resetFeedback, setTextAndUrls]);
 
   const handleImageDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -287,7 +298,7 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [mode]);
+  }, [mode, handleImageFile]);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -295,7 +306,7 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
         <div>
           <h3 className="text-sm font-semibold text-slate-700">Thêm kênh YouTube</h3>
           <p className="mt-1 text-xs text-slate-400">
-            Import nhiều kênh từ URL, ảnh chụp hoặc file Excel.
+            Thêm nhiều kênh từ đường dẫn, ảnh chụp hoặc file Excel.
           </p>
         </div>
         <div className="grid grid-cols-3 rounded-xl bg-slate-100 p-1">
@@ -323,14 +334,14 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
       {mode === "text" && (
         <div>
           <label className="mb-1.5 block text-xs font-medium text-slate-500">
-            Danh sách URL kênh
+            Danh sách đường dẫn kênh
           </label>
           <div className="relative">
             <LinkIcon className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
             <textarea
               value={rawText}
               onChange={(event) => setTextAndUrls(event.target.value)}
-              placeholder="Dán nhiều URL, mỗi dòng một kênh hoặc cả đoạn text có chứa URL YouTube"
+              placeholder="Dán nhiều đường dẫn, mỗi dòng một kênh hoặc cả đoạn văn có chứa đường dẫn YouTube"
               className="min-h-32 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               disabled={isBusy}
             />
@@ -364,7 +375,7 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
             <span className="text-sm font-semibold text-slate-700">
               {isParsingImage
                 ? `Đang đọc ảnh${ocrProgress !== null ? ` (${ocrProgress}%)` : ""}`
-                : "Chọn, kéo-thả hoặc dán ảnh chứa URL"}
+                : "Chọn, kéo-thả hoặc dán ảnh chứa đường dẫn"}
             </span>
             <span className="mt-1 flex items-center gap-1 text-xs text-slate-400">
               <Clipboard className="h-3.5 w-3.5" />
@@ -396,10 +407,10 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
               <FileSpreadsheet className="mb-3 h-8 w-8 text-indigo-500" />
             )}
             <span className="text-sm font-semibold text-slate-700">
-              {excelFile ? excelFile.name : "Chọn file Excel chứa URL kênh"}
+              {excelFile ? excelFile.name : "Chọn file Excel chứa đường dẫn kênh"}
             </span>
             <span className="mt-1 text-xs text-slate-400">
-              Hỗ trợ .xlsx và .csv; app sẽ quét URL ở mọi ô
+              Hỗ trợ .xlsx và .csv; hệ thống sẽ tìm đường dẫn trong các ô
             </span>
           </button>
           <input
@@ -419,9 +430,9 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
       {mode === "image" && rawText && (
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500">URL đã trích xuất</p>
+            <p className="text-xs font-semibold text-slate-500">Đường dẫn tìm được</p>
             <span className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-500">
-              {activeUrls.length} URL
+              {activeUrls.length} đường dẫn
             </span>
           </div>
           <textarea
@@ -440,10 +451,10 @@ export default function AddChannelForm({ groupId }: { groupId: string }) {
           className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
         >
           {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          Import kênh
+          Thêm kênh
         </button>
         <span className="text-xs text-slate-400">
-          {mode === "excel" ? (excelFile ? "Sẵn sàng import file đã chọn" : "Chưa chọn file") : `Phát hiện ${activeUrls.length} URL YouTube`}
+          {mode === "excel" ? (excelFile ? "Sẵn sàng thêm kênh từ file đã chọn" : "Chưa chọn file") : `Tìm thấy ${activeUrls.length} đường dẫn YouTube`}
         </span>
       </div>
 

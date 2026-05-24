@@ -1,7 +1,6 @@
 "use client";
 
 import { AlertTriangle, X } from "lucide-react";
-import { useEffect, useState } from "react";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -26,26 +25,21 @@ export default function ConfirmModal({
   isDestructive = true,
   isLoading = false,
 }: ConfirmModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted || !isOpen) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Overlay */}
       <div 
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" 
-        onClick={onClose}
+        onClick={isLoading ? undefined : onClose}
       />
       
       {/* Modal Content */}
       <div className="relative w-full max-w-md scale-100 transform overflow-hidden rounded-2xl bg-white p-6 shadow-2xl transition-all">
         <button
           onClick={onClose}
+          disabled={isLoading}
           className="absolute right-4 top-4 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
         >
           <X className="h-4 w-4" />

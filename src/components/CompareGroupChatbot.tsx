@@ -86,7 +86,7 @@ export default function CompareGroupChatbot({ groupId }: CompareGroupChatbotProp
           type="button"
           onClick={() => setIsOpen(true)}
           className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg transition-colors hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          aria-label="Mo chatbot phan tich group"
+          aria-label="Mở trợ lý phân tích nhóm"
         >
           <MessageCircle className="h-5 w-5" />
         </button>
@@ -100,7 +100,7 @@ export default function CompareGroupChatbot({ groupId }: CompareGroupChatbotProp
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold text-slate-900">AI phân tích nhóm</h2>
                 <p className="truncate text-xs text-slate-500">
-                  {isLoading ? "Đang xử lý dữ liệu..." : "Ollama local"}
+                  {isLoading ? "Đang xử lý dữ liệu..." : "Sẵn sàng phân tích"}
                 </p>
               </div>
             </div>
@@ -113,7 +113,7 @@ export default function CompareGroupChatbot({ groupId }: CompareGroupChatbotProp
                     setMessages([]);
                   }}
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                  aria-label="Xoa lich su chat"
+                  aria-label="Xoá lịch sử trò chuyện"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -122,7 +122,7 @@ export default function CompareGroupChatbot({ groupId }: CompareGroupChatbotProp
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                aria-label="Dong chatbot"
+                aria-label="Đóng trợ lý"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -186,7 +186,7 @@ export default function CompareGroupChatbot({ groupId }: CompareGroupChatbotProp
             {error && (
               <div className="space-y-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 <p>
-                  {error.message || "Không thể gửi câu hỏi. Kiểm tra Ollama, database hoặc thử lại."}
+                  Không thể gửi câu hỏi lúc này. Vui lòng thử lại sau.
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -234,7 +234,7 @@ export default function CompareGroupChatbot({ groupId }: CompareGroupChatbotProp
                   type="button"
                   onClick={() => void stop()}
                   className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-300 text-slate-600 transition-colors hover:bg-slate-100"
-                  aria-label="Dung phan hoi"
+                  aria-label="Dừng phản hồi"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -243,7 +243,7 @@ export default function CompareGroupChatbot({ groupId }: CompareGroupChatbotProp
                   type="submit"
                   disabled={!input.trim()}
                   className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-indigo-600 text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  aria-label="Gui cau hoi"
+                  aria-label="Gửi câu hỏi"
                 >
                   <Send className="h-4 w-4" />
                 </button>

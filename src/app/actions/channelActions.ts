@@ -7,8 +7,14 @@ import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 
+const CHANNEL_BATCH_DELAY_MS = 3000;
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getErrorLog(error: unknown) {
@@ -261,7 +267,7 @@ async function refreshChannelData(channel: {
     vidiqData = await getVidiqStats(channel.channel_id);
   } catch (vidiqError) {
     console.error("VidIQ fetch failed while refreshing channel:", vidiqError);
-    warning = "Đã cập nhật dữ liệu YouTube, nhưng không lấy được dữ liệu VidIQ.";
+    warning = "Đã cập nhật thông tin chính, nhưng chưa lấy được một phần dữ liệu tăng trưởng.";
   }
 
   const updatedChannel = await prisma.channel.update({
@@ -344,7 +350,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
         groupId,
         reason: "getChannelIdFromUrl returned null",
       });
-      throw new Error("URL không hợp lệ hoặc không tìm thấy kênh Youtube");
+      throw new Error("Đường dẫn không hợp lệ hoặc không tìm thấy kênh YouTube");
     }
 
     logChannelImport("info", "add:youtube-channel-id-resolved", {
@@ -432,7 +438,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
         youtubeChannelId,
         error: getErrorLog(vidiqError),
       });
-      warning = "Kênh đã được thêm, nhưng không lấy được dữ liệu view từ VidIQ. Các số liệu VidIQ đang được đặt mặc định.";
+      warning = "Kênh đã được thêm, nhưng chưa lấy được một phần dữ liệu tăng trưởng.";
     }
 
     // 3. Upsert the channel record so existing channels stay up to date.
@@ -534,7 +540,7 @@ export async function updateAdminChannel(channelId: string) {
   });
 
   if (!channel) {
-    throw new Error("Không tìm thấy kênh trong database");
+    throw new Error("Không tìm thấy kênh trong hệ thống");
   }
 
   return refreshChannelData(channel);
@@ -559,7 +565,11 @@ export async function updateAllAdminChannels() {
   let updated = 0;
   const failed: Array<{ channelId: string; title: string; message: string }> = [];
 
-  for (const channel of channels) {
+  for (const [index, channel] of channels.entries()) {
+    if (index > 0) {
+      await delay(CHANNEL_BATCH_DELAY_MS);
+    }
+
     try {
       await refreshChannelData(channel);
       updated += 1;
@@ -595,7 +605,7 @@ export async function deleteAdminChannel(channelId: string) {
   });
 
   if (!channel) {
-    throw new Error("Không tìm thấy kênh trong database");
+    throw new Error("Không tìm thấy kênh trong hệ thống");
   }
 
   await prisma.channel.delete({
@@ -628,7 +638,7 @@ export async function previewChannelsForGroup(inputs: string[], groupId: string)
         input,
         normalizedUrl,
         status: "duplicate",
-        message: "URL bị trùng trong danh sách nhập",
+        message: "Đường dẫn bị trùng trong danh sách nhập",
       });
       continue;
     }
@@ -640,7 +650,7 @@ export async function previewChannelsForGroup(inputs: string[], groupId: string)
         input,
         normalizedUrl,
         status: "invalid",
-        message: "Không nhận diện được URL kênh YouTube",
+        message: "Không nhận diện được đường dẫn kênh YouTube",
       });
       continue;
     }
@@ -651,7 +661,7 @@ export async function previewChannelsForGroup(inputs: string[], groupId: string)
         input,
         normalizedUrl,
         status: "ready",
-        message: "Kênh mới, sẽ fetch dữ liệu khi import",
+        message: "Kênh mới, sẽ lấy dữ liệu khi thêm",
       });
       continue;
     }
@@ -671,8 +681,8 @@ export async function previewChannelsForGroup(inputs: string[], groupId: string)
       normalizedUrl,
       status: existingLink ? "already-in-group" : "existing",
       message: existingLink
-        ? "Kênh đã có trong group này"
-        : "Kênh đã có trong cơ sở dữ liệu, chỉ cần liên kết vào group",
+        ? "Kênh đã có trong nhóm này"
+        : "Kênh đã có sẵn, chỉ cần thêm vào nhóm",
       channelId: existingChannel.id,
       channelTitle: existingChannel.title,
     });
@@ -691,6 +701,7 @@ export async function previewChannelsForGroup(inputs: string[], groupId: string)
 export async function importChannelsToGroup(inputs: string[], groupId: string) {
   const preview = await previewChannelsForGroup(inputs, groupId);
   const results: ChannelImportResultItem[] = [];
+  let fetchedChannelCount = 0;
 
   for (const item of preview.items) {
     if (item.status === "already-in-group" || item.status === "duplicate" || item.status === "invalid") {
@@ -704,14 +715,22 @@ export async function importChannelsToGroup(inputs: string[], groupId: string) {
     }
 
     try {
+      if (item.status === "ready" && fetchedChannelCount > 0) {
+        await delay(CHANNEL_BATCH_DELAY_MS);
+      }
+
       const result = await addChannelToGroup(item.normalizedUrl || item.input, groupId);
+      if (item.status === "ready") {
+        fetchedChannelCount += 1;
+      }
+
       results.push({
         input: item.input,
         status: "added",
         message:
           item.status === "existing"
-            ? "Đã thêm từ dữ liệu có sẵn, không fetch lại API"
-            : result.warning || "Đã fetch dữ liệu và thêm kênh",
+            ? "Đã thêm từ dữ liệu có sẵn"
+            : result.warning || "Đã lấy dữ liệu và thêm kênh",
         channelId: result.channelId,
       });
     } catch (error: unknown) {
