@@ -4,16 +4,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Loader2, MessageCircle, RotateCcw, Send, Trash2, X } from "lucide-react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
+import { stripModelReasoning } from "@/lib/chatReasoning";
 
 type CompareGroupChatbotProps = {
   groupId: string;
 };
 
 function getMessageText(message: UIMessage) {
-  return message.parts
+  const text = message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("");
+
+  return stripModelReasoning(text);
 }
 
 function hasToolActivity(message: UIMessage) {
