@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   GitCompareArrows,
@@ -35,8 +35,15 @@ export default function Sidebar({
   onToggle?: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = (session?.user as SessionUserWithRole | undefined)?.role === "ADMIN";
+
+  const handleSignOut = async () => {
+    await signOut({ redirect: false });
+    router.replace("/login");
+    router.refresh();
+  };
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-sidebar-bg text-sidebar-fg">
@@ -153,7 +160,8 @@ export default function Sidebar({
       {/* Sign Out */}
       <div className="border-t border-white/10 p-3">
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          type="button"
+          onClick={handleSignOut}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition-colors hover:bg-white/5 hover:text-red-400"
         >
           <LogOut className="h-[18px] w-[18px]" />
