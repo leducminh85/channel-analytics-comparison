@@ -1,9 +1,22 @@
-const VIDIQ_BEARER_TOKEN = process.env.VIDIQ_BEARER_TOKEN;
-const VIDIQ_BEARER_TOKEN2 = process.env.VIDIQ_BEARER_TOKEN2;
+const VIDIQ_BEARER_TOKENS = [
+  { value: process.env.VIDIQ_BEARER_TOKEN, label: "VIDIQ_BEARER_TOKEN" },
+  { value: process.env.VIDIQ_BEARER_TOKEN2, label: "VIDIQ_BEARER_TOKEN2" },
+  { value: process.env.VIDIQ_BEARER_TOKEN3, label: "VIDIQ_BEARER_TOKEN3" },
+  { value: process.env.VIDIQ_BEARER_TOKEN4, label: "VIDIQ_BEARER_TOKEN4" },
+  { value: process.env.VIDIQ_BEARER_TOKEN5, label: "VIDIQ_BEARER_TOKEN5" },
+  { value: process.env.VIDIQ_BEARER_TOKEN6, label: "VIDIQ_BEARER_TOKEN6" },
+];
 const VIDIQ_CLIENT_ID = process.env.VIDIQ_CLIENT_ID;
 const VIDIQ_RETRY_DELAY_MS = 3000;
-// First pass immediately, then repeat the token1/token2 cycle 3 more times.
+// First pass immediately, then repeat the configured token cycle 3 more times.
 const VIDIQ_RETRY_ROUNDS = 4;
+
+interface VidiqToken {
+  value: string;
+  label: string;
+}
+
+let nextVidiqTokenIndex = 0;
 
 interface VidiqDailyStat {
   date: number | string;
@@ -31,6 +44,20 @@ interface VidiqMonthlyStat {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getConfiguredVidiqTokens() {
+  return VIDIQ_BEARER_TOKENS.filter((item): item is VidiqToken => Boolean(item.value));
+}
+
+function getRoundRobinTokenOrder(tokens: VidiqToken[]) {
+  const startIndex = nextVidiqTokenIndex % tokens.length;
+  nextVidiqTokenIndex = (startIndex + 1) % tokens.length;
+
+  return [
+    ...tokens.slice(startIndex),
+    ...tokens.slice(0, startIndex),
+  ];
 }
 
 /**
@@ -165,15 +192,13 @@ async function fetchVidiqStatsWithToken(channelId: string, token: string, tokenL
 }
 
 export async function getVidiqStats(channelId: string) {
-  const tokens = [
-    { value: VIDIQ_BEARER_TOKEN, label: "VIDIQ_BEARER_TOKEN" },
-    { value: VIDIQ_BEARER_TOKEN2, label: "VIDIQ_BEARER_TOKEN2" },
-  ].filter((item): item is { value: string; label: string } => Boolean(item.value));
+  const tokens = getConfiguredVidiqTokens();
 
   if (tokens.length === 0) {
-    throw new Error("Thieu cau hinh VIDIQ_BEARER_TOKEN hoac VIDIQ_BEARER_TOKEN2 trong .env");
+    throw new Error("Thieu cau hinh VIDIQ_BEARER_TOKEN trong .env");
   }
 
+  const tokenOrder = getRoundRobinTokenOrder(tokens);
   let lastError: unknown;
 
   for (let round = 0; round < VIDIQ_RETRY_ROUNDS; round += 1) {
@@ -182,7 +207,7 @@ export async function getVidiqStats(channelId: string) {
       await sleep(VIDIQ_RETRY_DELAY_MS);
     }
 
-    for (const token of tokens) {
+    for (const token of tokenOrder) {
       try {
         return await fetchVidiqStatsWithToken(channelId, token.value, token.label);
       } catch (error) {
