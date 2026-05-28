@@ -13,6 +13,7 @@ import {
 import { stripModelReasoning } from "@/lib/chatReasoning";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getAccessibleGroupWhere } from "@/lib/groupAccess";
 
 export const runtime = "nodejs";
 
@@ -556,7 +557,7 @@ export async function POST(request: Request) {
     const userId = (session?.user as { id?: string } | undefined)?.id;
 
     if (!userId) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: "Không có quyền" }, { status: 401 });
     }
 
     const { messages, groupId } = chatRequestSchema.parse(await request.json());
@@ -564,7 +565,7 @@ export async function POST(request: Request) {
     const group = await prisma.compareGroup.findFirst({
       where: {
         id: groupId,
-        userId,
+        ...getAccessibleGroupWhere(userId),
       },
       select: {
         id: true,
@@ -573,7 +574,7 @@ export async function POST(request: Request) {
     });
 
     if (!group) {
-      return Response.json({ error: "Compare group not found" }, { status: 404 });
+      return Response.json({ error: "Không tìm thấy nhóm" }, { status: 404 });
     }
 
     const databaseContext = await getGroupDatabaseContext(groupId, {

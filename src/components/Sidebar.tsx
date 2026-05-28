@@ -20,6 +20,7 @@ interface CompareGroup {
   id: string;
   name: string;
   icon?: string | null;
+  accessRole?: "OWNER" | "EDITOR" | "VIEWER";
 }
 
 type SessionUserWithRole = {
@@ -104,6 +105,11 @@ export default function Sidebar({
             )}
             {groups.map((group) => {
               const isActive = pathname === `/group/${group.id}`;
+              const accessLabel = group.accessRole === "OWNER" || !group.accessRole ? "Chủ" : "Chia sẻ";
+              const accessClass =
+                group.accessRole === "OWNER" || !group.accessRole
+                  ? "bg-white/10 text-slate-300"
+                  : "bg-emerald-500/15 text-emerald-200";
               
               // Resolve dynamic icon
               const iconName = group.icon as keyof typeof LucideIcons | undefined;
@@ -128,7 +134,10 @@ export default function Sidebar({
                   <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br ${gradientClass} shadow-sm opacity-80 group-hover:opacity-100`}>
                     <DynamicIcon className="h-3.5 w-3.5 text-white" />
                   </div>
-                  <span className="truncate">{group.name}</span>
+                  <span className="min-w-0 flex-1 truncate">{group.name}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase ${accessClass}`}>
+                    {accessLabel}
+                  </span>
                   <ChevronRight
                     className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${
                       isActive ? "opacity-100" : "opacity-0 group-hover:opacity-50"

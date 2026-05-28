@@ -6,6 +6,7 @@ import { getVidiqStats } from "@/lib/services/vidiq";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
+import { getSessionUserId, requireGroupAccess } from "@/lib/groupAccess";
 
 const CHANNEL_BATCH_DELAY_MS = 3000;
 
@@ -91,6 +92,14 @@ async function checkAdmin() {
   if (!session || (session.user as { role?: string } | undefined)?.role !== "ADMIN") {
     throw new Error("Không có quyền truy cập");
   }
+}
+
+async function checkGroupEditor(groupId: string) {
+  const session = await getServerSession(authOptions);
+  const userId = getSessionUserId(session);
+  if (!userId) throw new Error("Không có quyền");
+
+  await requireGroupAccess(groupId, userId, ["OWNER", "EDITOR"]);
 }
 
 function serializeAdminChannel(channel: ChannelForAdmin) {
@@ -305,6 +314,8 @@ async function refreshChannelData(channel: {
  * Add a YouTube channel to a comparison group.
  */
 export async function addChannelToGroup(url: string, groupId: string) {
+  await checkGroupEditor(groupId);
+
   const normalizedUrl = normalizeYoutubeUrl(url);
 
   logChannelImport("info", "add:start", {
@@ -625,6 +636,8 @@ export async function deleteAdminChannel(channelId: string) {
  * Preview a batch import without fetching new channel data from external APIs.
  */
 export async function previewChannelsForGroup(inputs: string[], groupId: string) {
+  await checkGroupEditor(groupId);
+
   const seen = new Set<string>();
   const items: ChannelImportPreviewItem[] = [];
 
@@ -699,6 +712,8 @@ export async function previewChannelsForGroup(inputs: string[], groupId: string)
  * Import multiple YouTube channels into one comparison group.
  */
 export async function importChannelsToGroup(inputs: string[], groupId: string) {
+  await checkGroupEditor(groupId);
+
   const preview = await previewChannelsForGroup(inputs, groupId);
   const results: ChannelImportResultItem[] = [];
   let fetchedChannelCount = 0;
@@ -765,6 +780,8 @@ export async function importChannelsToGroup(inputs: string[], groupId: string) {
  * Remove a channel from a comparison group.
  */
 export async function removeChannelFromGroup(channelId: string, groupId: string) {
+  await checkGroupEditor(groupId);
+
   try {
     await prisma.groupChannel.delete({
       where: {

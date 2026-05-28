@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Plus, GitCompareArrows, ArrowRight, Video, Users } from "lucide-react";
+import { Plus, GitCompareArrows, ArrowRight, Video, Users, type LucideIcon } from "lucide-react";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import GroupActionMenu from "@/components/GroupActionMenu";
 import * as LucideIcons from "lucide-react";
@@ -14,6 +14,15 @@ interface CompareGroup {
   name: string;
   icon?: string | null;
   createdAt: Date | string;
+  accessRole: "OWNER" | "EDITOR" | "VIEWER";
+  canEdit: boolean;
+  canManageShares: boolean;
+  canDelete: boolean;
+  owner?: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  };
   channels: {
     channel: {
       id: string;
@@ -31,6 +40,8 @@ export default function DashboardClient({
   userName: string;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const myGroups = groups.filter((group) => group.accessRole === "OWNER");
+  const sharedGroups = groups.filter((group) => group.accessRole !== "OWNER");
 
   const uniqueChannelIds = new Set();
   groups.forEach((group) => {
@@ -39,6 +50,84 @@ export default function DashboardClient({
     });
   });
   const totalChannels = uniqueChannelIds.size;
+  const renderGroupCard = (group: CompareGroup) => {
+    const channelCount = group.channels?.length || 0;
+    const logos = group.channels?.map((groupChannel) => groupChannel.channel.logo_url).filter(Boolean) as string[];
+
+    const DynamicIcon: LucideIcon =
+      group.icon && LucideIcons[group.icon as keyof typeof LucideIcons]
+        ? (LucideIcons[group.icon as keyof typeof LucideIcons] as LucideIcon)
+        : GitCompareArrows;
+    const gradientClass = group.icon && ICON_COLORS[group.icon]
+      ? ICON_COLORS[group.icon]
+      : "from-indigo-500 to-violet-500";
+
+    return (
+      <div
+        key={group.id}
+        className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5"
+      >
+        <Link href={`/group/${group.id}`} className="absolute inset-0 z-10 rounded-2xl">
+          <span className="sr-only">Xem chi tiết {group.name}</span>
+        </Link>
+
+        <div className="mb-4 flex items-start justify-between">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradientClass} shadow-lg opacity-90 transition-opacity group-hover:opacity-100`}>
+            <DynamicIcon className="h-5 w-5 text-white" />
+          </div>
+          {(group.canEdit || group.canManageShares || group.canDelete) && (
+            <div className="relative z-20">
+              <GroupActionMenu
+                groupId={group.id}
+                groupName={group.name}
+                currentIcon={group.icon}
+                canEdit={group.canEdit}
+                canManageShares={group.canManageShares}
+                canDelete={group.canDelete}
+              />
+            </div>
+          )}
+        </div>
+
+        <h3 className="text-base font-semibold text-slate-800 transition-colors group-hover:text-indigo-600">
+          {group.name}
+        </h3>
+        {group.accessRole !== "OWNER" && group.owner && (
+          <p className="mt-1 truncate text-xs text-slate-400">
+            Chia sẻ bởi {group.owner.name || group.owner.email || "chủ"}
+          </p>
+        )}
+
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <div className="flex -space-x-2 overflow-hidden">
+              {logos.slice(0, 4).map((logo, index) => (
+                <div
+                  key={index}
+                  className="relative inline-block h-7 w-7 overflow-hidden rounded-full border border-slate-100 ring-2 ring-white"
+                >
+                  <Image src={logo} alt="" fill className="object-cover" />
+                </div>
+              ))}
+              {logos.length > 4 && (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 ring-2 ring-white">
+                  +{logos.length - 4}
+                </div>
+              )}
+            </div>
+            <span className="ml-3 text-xs font-medium text-slate-500">
+              {channelCount} kênh
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 text-xs font-medium text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">
+            Xem chi tiết
+            <ArrowRight className="h-3.5 w-3.5" />
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -82,10 +171,7 @@ export default function DashboardClient({
         </div>
       </div>
 
-      <div>
-        <h2 className="mb-4 text-base font-semibold text-slate-800">
-          Danh sách nhóm so sánh
-        </h2>
+      <div className="space-y-8">
         {groups.length === 0 ? (
           <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-white py-16">
             <div className="mb-3 rounded-full bg-indigo-50 p-4">
@@ -99,74 +185,33 @@ export default function DashboardClient({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {groups.map((group) => {
-              const channelCount = group.channels?.length || 0;
-              const logos = group.channels?.map((groupChannel) => groupChannel.channel.logo_url).filter(Boolean) as string[];
-
-              // @ts-ignore
-              const DynamicIcon = group.icon ? LucideIcons[group.icon] || GitCompareArrows : GitCompareArrows;
-              const gradientClass = group.icon && ICON_COLORS[group.icon]
-                ? ICON_COLORS[group.icon]
-                : "from-indigo-500 to-violet-500";
-
-              return (
-                <div
-                  key={group.id}
-                  className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-500/5"
-                >
-                  <Link href={`/group/${group.id}`} className="absolute inset-0 z-10 rounded-2xl">
-                    <span className="sr-only">Xem chi tiết {group.name}</span>
-                  </Link>
-
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradientClass} shadow-lg opacity-90 transition-opacity group-hover:opacity-100`}>
-                      <DynamicIcon className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="relative z-20">
-                      <GroupActionMenu
-                        groupId={group.id}
-                        groupName={group.name}
-                        currentIcon={group.icon}
-                      />
-                    </div>
-                  </div>
-
-                  <h3 className="text-base font-semibold text-slate-800 transition-colors group-hover:text-indigo-600">
-                    {group.name}
-                  </h3>
-
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="flex -space-x-2 overflow-hidden">
-                        {logos.slice(0, 4).map((logo, index) => (
-                          <div
-                            key={index}
-                            className="relative inline-block h-7 w-7 overflow-hidden rounded-full border border-slate-100 ring-2 ring-white"
-                          >
-                            <Image src={logo} alt="" fill className="object-cover" />
-                          </div>
-                        ))}
-                        {logos.length > 4 && (
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 ring-2 ring-white">
-                            +{logos.length - 4}
-                          </div>
-                        )}
-                      </div>
-                      <span className="ml-3 text-xs font-medium text-slate-500">
-                        {channelCount} kênh
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1 text-xs font-medium text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">
-                      Xem chi tiết
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </div>
-                  </div>
+          <>
+            <section>
+              <h2 className="mb-4 text-base font-semibold text-slate-800">
+                Nhóm của tôi
+              </h2>
+              {myGroups.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-8 text-sm text-slate-500">
+                  Bạn chưa sở hữu nhóm nào.
                 </div>
-              );
-            })}
-          </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {myGroups.map(renderGroupCard)}
+                </div>
+              )}
+            </section>
+
+            {sharedGroups.length > 0 && (
+              <section>
+                <h2 className="mb-4 text-base font-semibold text-slate-800">
+                  Được chia sẻ
+                </h2>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {sharedGroups.map(renderGroupCard)}
+                </div>
+              </section>
+            )}
+          </>
         )}
       </div>
 

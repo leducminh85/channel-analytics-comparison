@@ -6,6 +6,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum GroupShareRole {
+  VIEWER
+  EDITOR
+}
+
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -48,6 +53,7 @@ model User {
   updatedAt     DateTime       @default(now()) @updatedAt
   accounts      Account[]
   compareGroups CompareGroup[]
+  groupShares   CompareGroupShare[]
   sessions      Session[]
 
   @@map("users")
@@ -71,8 +77,23 @@ model CompareGroup {
   updatedAt DateTime       @updatedAt
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   channels  GroupChannel[]
+  shares    CompareGroupShare[]
 
   @@map("compare_groups")
+}
+
+model CompareGroupShare {
+  id        String         @id @default(cuid())
+  groupId   String
+  userId    String
+  role      GroupShareRole @default(VIEWER)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  group     CompareGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("compare_group_shares")
 }
 
 model Channel {

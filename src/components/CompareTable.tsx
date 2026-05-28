@@ -39,10 +39,12 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 export default function CompareTable({
   channels,
-  groupId
+  groupId,
+  canEdit = true
 }: {
   channels: Channel[],
-  groupId: string
+  groupId: string,
+  canEdit?: boolean
 }) {
   const [isPending, startTransition] = useTransition();
   const [deletingChannel, setDeletingChannel] = useState<{id: string, title: string} | null>(null);
@@ -71,7 +73,9 @@ export default function CompareTable({
           {"Ch\u01b0a c\u00f3 k\u00eanh n\u00e0o trong nh\u00f3m"}
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          {"S\u1eed d\u1ee5ng form ph\u00eda tr\u00ean \u0111\u1ec3 th\u00eam k\u00eanh Youtube"}
+          {canEdit
+            ? "S\u1eed d\u1ee5ng form ph\u00eda tr\u00ean \u0111\u1ec3 th\u00eam k\u00eanh Youtube"
+            : "Nh\u00f3m n\u00e0y ch\u01b0a c\u00f3 k\u00eanh n\u00e0o"}
         </p>
       </div>
     );
@@ -111,9 +115,11 @@ export default function CompareTable({
                   <Clock className="h-3.5 w-3.5" /> {"Chu k\u1ef3 \u0111\u0103ng"}
                 </div>
               </th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
-                {/* Actions */}
-              </th>
+              {canEdit && (
+                <th className="whitespace-nowrap px-5 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  {/* Actions */}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -180,18 +186,20 @@ export default function CompareTable({
                   {channel.uploadFrequency || "N/A"}
                 </td>
 
-                <td className="px-5 py-4 text-center relative overflow-visible">
-                  <ActionMenu
-                    items={[
-                      {
-                        label: "X\u00f3a kh\u1ecfi nh\u00f3m",
-                        icon: <Trash2 className="h-4 w-4" />,
-                        onClick: () => setDeletingChannel({ id: channel.id, title: channel.title }),
-                        variant: "destructive",
-                      },
-                    ]}
-                  />
-                </td>
+                {canEdit && (
+                  <td className="relative overflow-visible px-5 py-4 text-center">
+                    <ActionMenu
+                      items={[
+                        {
+                          label: "X\u00f3a kh\u1ecfi nh\u00f3m",
+                          icon: <Trash2 className="h-4 w-4" />,
+                          onClick: () => setDeletingChannel({ id: channel.id, title: channel.title }),
+                          variant: "destructive",
+                        },
+                      ]}
+                    />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -8,6 +8,7 @@ interface CompareGroup {
   id: string;
   name: string;
   icon?: string | null;
+  accessRole?: "OWNER" | "EDITOR" | "VIEWER";
 }
 
 export default function AppShell({

@@ -47,6 +47,10 @@ type Channel = {
 type CompareGroupDetails = {
   name: string;
   icon: string | null;
+  accessRole: "OWNER" | "EDITOR" | "VIEWER";
+  canEdit: boolean;
+  canManageShares: boolean;
+  canDelete: boolean;
   channels?: Array<{
     channel: Channel;
   }>;
@@ -103,18 +107,23 @@ export default async function GroupDetailPage({
             {`${channels.length} k\u00eanh \u0111ang \u0111\u01b0\u1ee3c so s\u00e1nh`}
           </p>
         </div>
-        <div className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm rounded-xl px-2 py-1">
-          <GroupActionMenu
-            groupId={id}
-            groupName={group.name}
-            currentIcon={group.icon}
-            redirectToDashboard={true}
-          />
-        </div>
+        {(group.canEdit || group.canManageShares || group.canDelete) && (
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-sm">
+            <GroupActionMenu
+              groupId={id}
+              groupName={group.name}
+              currentIcon={group.icon}
+              redirectToDashboard={true}
+              canEdit={group.canEdit}
+              canManageShares={group.canManageShares}
+              canDelete={group.canDelete}
+            />
+          </div>
+        )}
       </div>
 
-      <AddChannelForm groupId={id} />
-      <CompareTable channels={channels} groupId={id} />
+      {group.canEdit && <AddChannelForm groupId={id} />}
+      <CompareTable channels={channels} groupId={id} canEdit={group.canEdit} />
       <ViewsChart channels={channels} />
 
       {channels.some((channel) => channel.monthlyStats.length > 0) && (
