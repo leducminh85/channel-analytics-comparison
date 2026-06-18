@@ -11,7 +11,18 @@ services:
       - NEXTAUTH_SECRET=your-secret-key-change-this-in-production
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
       - VIDIQ_BEARER_TOKEN=${VIDIQ_BEARER_TOKEN}
+      - VIDIQ_BEARER_TOKEN2=${VIDIQ_BEARER_TOKEN2}
+      - VIDIQ_BEARER_TOKEN3=${VIDIQ_BEARER_TOKEN3}
+      - VIDIQ_BEARER_TOKEN4=${VIDIQ_BEARER_TOKEN4}
+      - VIDIQ_BEARER_TOKEN5=${VIDIQ_BEARER_TOKEN5}
+      - VIDIQ_BEARER_TOKEN6=${VIDIQ_BEARER_TOKEN6}
       - VIDIQ_CLIENT_ID=${VIDIQ_CLIENT_ID}
+      - AI_CHAT_PROVIDER=${AI_CHAT_PROVIDER:-auto}
+      - AI_CHAT_ENABLE_TOOLS=${AI_CHAT_ENABLE_TOOLS:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.4-mini}
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
     depends_on:
       db:
         condition: service_healthy

@@ -23,12 +23,36 @@ const ollamaBaseUrl = `${(process.env.OLLAMA_BASE_URL ?? "http://localhost:11434
   ""
 )}/v1`;
 const ollamaModel = process.env.OLLAMA_MODEL ?? "llama3.2:3b";
+const openaiModel = process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
+const chatProvider = process.env.AI_CHAT_PROVIDER ?? "auto";
 const enableChatTools = process.env.AI_CHAT_ENABLE_TOOLS === "true";
+const openai = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 const ollama = createOpenAI({
   name: "ollama",
   baseURL: ollamaBaseUrl,
   apiKey: process.env.OLLAMA_API_KEY ?? "ollama",
 });
+
+function getChatModel() {
+  const hasOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
+  const provider = chatProvider.toLowerCase();
+
+  if (provider === "openai" || (provider === "auto" && hasOpenAIKey)) {
+    return {
+      provider: "openai",
+      modelName: openaiModel,
+      model: openai.chat(openaiModel),
+    };
+  }
+
+  return {
+    provider: "ollama",
+    modelName: ollamaModel,
+    model: ollama.chat(ollamaModel),
+  };
+}
 
 const chatRequestSchema = z.object({
   groupId: z.string().min(1),
@@ -632,10 +656,17 @@ export async function POST(request: Request) {
       }),
     };
 
+    const chatModel = getChatModel();
+    console.info("[AIChat] Starting response", {
+      provider: chatModel.provider,
+      model: chatModel.modelName,
+      toolsEnabled: enableChatTools,
+    });
+
     const result = streamText({
-      model: ollama.chat(ollamaModel),
-      temperature: 0.1,
-      maxOutputTokens: 900,
+      model: chatModel.model,
+      ...(chatModel.provider === "ollama" ? { temperature: 0.1 } : {}),
+      maxOutputTokens: 1600,
       system: buildSystemPrompt({
         group,
         dataPacket,
