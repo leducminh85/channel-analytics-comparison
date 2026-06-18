@@ -7,10 +7,12 @@ import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { getSessionUserId, requireGroupAccess } from "@/lib/groupAccess";
+import type { Prisma } from "@prisma/client";
 
 const CHANNEL_IMPORT_BATCH_DELAY_MS = 3000;
 const CHANNEL_ADMIN_UPDATE_BATCH_DELAY_MS = 10 * 60 * 1000;
 const CHANNEL_UPDATE_DATE_TIME_ZONE = process.env.CHANNEL_UPDATE_DATE_TIME_ZONE ?? "Asia/Ho_Chi_Minh";
+const ADMIN_CHANNELS_PAGE_SIZE = 25;
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -549,21 +551,71 @@ export async function addChannelToGroup(url: string, groupId: string) {
   }
 }
 
-export async function getAdminChannels() {
+type AdminChannelsCursor = {
+  updatedAt: string;
+  id: string;
+};
+
+export async function getAdminChannels(options?: { cursor?: AdminChannelsCursor | null; search?: string }) {
   await checkAdmin();
 
-  const channels = await prisma.channel.findMany({
-    include: {
-      _count: {
-        select: { groups: true },
-      },
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-  });
+  const search = options?.search?.trim();
+  const cursorDate = options?.cursor ? new Date(options.cursor.updatedAt) : null;
+  const searchWhere: Prisma.ChannelWhereInput = search
+    ? {
+        OR: [
+          { title: { contains: search, mode: "insensitive" } },
+          { channel_url: { contains: search, mode: "insensitive" } },
+          { channel_id: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : {};
+  const cursorWhere: Prisma.ChannelWhereInput =
+    cursorDate && !Number.isNaN(cursorDate.getTime())
+      ? {
+          OR: [
+            { updatedAt: { lt: cursorDate } },
+            {
+              updatedAt: cursorDate,
+              id: { lt: options?.cursor?.id },
+            },
+          ],
+        }
+      : {};
+  const where: Prisma.ChannelWhereInput = {
+    AND: [searchWhere, cursorWhere],
+  };
 
-  return channels.map(serializeAdminChannel);
+  const [total, channels] = await Promise.all([
+    prisma.channel.count({ where: searchWhere }),
+    prisma.channel.findMany({
+      where,
+      take: ADMIN_CHANNELS_PAGE_SIZE + 1,
+      include: {
+        _count: {
+          select: { groups: true },
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    }),
+  ]);
+
+  const hasMore = channels.length > ADMIN_CHANNELS_PAGE_SIZE;
+  const items = channels.slice(0, ADMIN_CHANNELS_PAGE_SIZE);
+  const lastItem = items.at(-1);
+
+  return {
+    items: items.map(serializeAdminChannel),
+    total,
+    hasMore,
+    nextCursor:
+      hasMore && lastItem
+        ? {
+            updatedAt: lastItem.updatedAt.toISOString(),
+            id: lastItem.id,
+          }
+        : null,
+  };
 }
 
 export async function updateAdminChannel(channelId: string) {

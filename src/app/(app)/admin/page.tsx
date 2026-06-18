@@ -12,6 +12,8 @@ import {
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Database,
   ExternalLink,
@@ -55,6 +57,16 @@ interface AdminChannel {
   updatedAt: string;
 }
 
+type AdminChannelsCursor = {
+  updatedAt: string;
+  id: string;
+};
+
+type ToastMessage = {
+  type: "success" | "error";
+  text: string;
+};
+
 type ConfirmState =
   | { type: "delete-user"; user: AdminUser }
   | { type: "update-all-channels" }
@@ -84,7 +96,12 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [channels, setChannels] = useState<AdminChannel[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
-  const [loadingChannels, setLoadingChannels] = useState(true);
+  const [loadingChannels, setLoadingChannels] = useState(false);
+  const [loadingMoreChannels, setLoadingMoreChannels] = useState(false);
+  const [channelsExpanded, setChannelsExpanded] = useState(false);
+  const [channelTotal, setChannelTotal] = useState<number | null>(null);
+  const [channelHasMore, setChannelHasMore] = useState(false);
+  const [channelNextCursor, setChannelNextCursor] = useState<AdminChannelsCursor | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [channelSearchTerm, setChannelSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -99,12 +116,28 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("USER");
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   useEffect(() => {
     fetchUsers();
-    fetchChannels();
   }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const timeoutId = window.setTimeout(() => setToast(null), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!channelsExpanded) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void fetchChannels({ reset: true });
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [channelSearchTerm, channelsExpanded]);
 
   async function fetchUsers() {
     setLoadingUsers(true);
@@ -112,37 +145,56 @@ export default function AdminPage() {
       const data = await getUsers();
       setUsers(data as AdminUser[]);
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể tải danh sách user") });
+      setToast({ type: "error", text: getErrorMessage(error, "Không thể tải danh sách user") });
     } finally {
       setLoadingUsers(false);
     }
   }
 
-  async function fetchChannels() {
-    setLoadingChannels(true);
+  async function fetchChannels({ reset = false }: { reset?: boolean } = {}) {
+    if (!reset && !channelHasMore) return;
+
+    if (reset) {
+      setLoadingChannels(true);
+      setChannels([]);
+    } else {
+      setLoadingMoreChannels(true);
+    }
+
     try {
-      const data = await getAdminChannels();
-      setChannels(data);
+      const data = await getAdminChannels({
+        cursor: reset ? null : channelNextCursor,
+        search: channelSearchTerm,
+      });
+
+      setChannels((current) => (reset ? data.items : [...current, ...data.items]));
+      setChannelTotal(data.total);
+      setChannelHasMore(data.hasMore);
+      setChannelNextCursor(data.nextCursor);
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể tải danh sách kênh") });
+      setToast({ type: "error", text: getErrorMessage(error, "Không thể tải danh sách kênh") });
     } finally {
-      setLoadingChannels(false);
+      if (reset) {
+        setLoadingChannels(false);
+      } else {
+        setLoadingMoreChannels(false);
+      }
     }
   }
 
   const handleCreateUser = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
-    setMessage(null);
+    setToast(null);
 
     try {
       await createUser({ name, email, password, role });
-      setMessage({ type: "success", text: "Tạo tài khoản thành công" });
+      setToast({ type: "success", text: "Tạo tài khoản thành công" });
       setIsModalOpen(false);
       resetForm();
       fetchUsers();
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể tạo tài khoản") });
+      setToast({ type: "error", text: getErrorMessage(error, "Không thể tạo tài khoản") });
     } finally {
       setSubmitting(false);
     }
@@ -153,15 +205,15 @@ export default function AdminPage() {
     if (!selectedUser) return;
 
     setSubmitting(true);
-    setMessage(null);
+    setToast(null);
 
     try {
       await resetPassword(selectedUser.id, password);
-      setMessage({ type: "success", text: "Đặt lại mật khẩu thành công" });
+      setToast({ type: "success", text: "Đặt lại mật khẩu thành công" });
       setIsModalOpen(false);
       resetForm();
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể đặt lại mật khẩu") });
+      setToast({ type: "error", text: getErrorMessage(error, "Không thể đặt lại mật khẩu") });
     } finally {
       setSubmitting(false);
     }
@@ -169,14 +221,14 @@ export default function AdminPage() {
 
   const handleDeleteUser = async (user: AdminUser) => {
     setSubmitting(true);
-    setMessage(null);
+    setToast(null);
     try {
       await deleteUser(user.id);
       await fetchUsers();
       setConfirmState(null);
-      setMessage({ type: "success", text: `Đã xoá tài khoản ${user.email || user.name || ""}` });
+      setToast({ type: "success", text: `Đã xoá tài khoản ${user.email || user.name || ""}` });
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể xoá tài khoản") });
+      setToast({ type: "error", text: getErrorMessage(error, "Không thể xoá tài khoản") });
     } finally {
       setSubmitting(false);
     }
@@ -184,21 +236,21 @@ export default function AdminPage() {
 
   const handleUpdateChannel = async (channel: AdminChannel) => {
     setUpdatingChannelIds((current) => ({ ...current, [channel.id]: true }));
-    setMessage(null);
+    setToast(null);
 
     try {
       const result = await updateAdminChannel(channel.id);
       setChannels((current) =>
         current.map((item) => (item.id === channel.id ? result.channel : item))
       );
-      setMessage({
+      setToast({
         type: result.warning ? "error" : "success",
         text: result.skipped
           ? `Kênh ${result.channel.title} đã được cập nhật hôm nay, bỏ qua.`
           : result.warning || `Đã cập nhật kênh ${result.channel.title}`,
       });
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể cập nhật kênh") });
+      setToast({ type: "error", text: getErrorMessage(error, "Không thể cập nhật kênh") });
     } finally {
       setUpdatingChannelIds((current) => {
         const next = { ...current };
@@ -209,15 +261,17 @@ export default function AdminPage() {
   };
 
   const handleUpdateAllChannels = async () => {
-    if (channels.length === 0) return;
+    if (channelTotal === 0) return;
 
     setUpdatingAllChannels(true);
-    setMessage(null);
+    setToast(null);
     setConfirmState(null);
 
     try {
       const result = await updateAllAdminChannels();
-      await fetchChannels();
+      if (channelsExpanded) {
+        await fetchChannels({ reset: true });
+      }
       const skippedText =
         result.skipped > 0 ? `, bỏ qua ${result.skipped} kênh đã cập nhật hôm nay` : "";
       const summaryText = `Đã cập nhật ${result.updated}/${result.total} kênh${skippedText}`;
@@ -228,15 +282,15 @@ export default function AdminPage() {
           .map((item) => `${item.title}: ${item.message}`)
           .join("; ");
         const suffix = result.failed.length > 3 ? `; và ${result.failed.length - 3} kênh khác` : "";
-        setMessage({
+        setToast({
           type: "error",
           text: `${summaryText}. Lỗi: ${failedText}${suffix}`,
         });
       } else {
-        setMessage({ type: "success", text: summaryText });
+        setToast({ type: "success", text: summaryText });
       }
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể cập nhật toàn bộ kênh") });
+      setToast({ type: "error", text: getErrorMessage(error, "Không thể cập nhật toàn bộ kênh") });
     } finally {
       setUpdatingAllChannels(false);
     }
@@ -244,15 +298,16 @@ export default function AdminPage() {
 
   const handleDeleteChannel = async (channel: AdminChannel) => {
     setUpdatingChannelIds((current) => ({ ...current, [channel.id]: true }));
-    setMessage(null);
+    setToast(null);
 
     try {
       await deleteAdminChannel(channel.id);
       setChannels((current) => current.filter((item) => item.id !== channel.id));
+      setChannelTotal((current) => (current === null ? current : Math.max(0, current - 1)));
       setConfirmState(null);
-      setMessage({ type: "success", text: `Đã xóa kênh ${channel.title}` });
+      setToast({ type: "success", text: `Đã xóa kênh ${channel.title}` });
     } catch (error: unknown) {
-      setMessage({ type: "error", text: getErrorMessage(error, "Không thể xóa kênh") });
+      setToast({ type: "error", text: getErrorMessage(error, "Không thể xóa kênh") });
     } finally {
       setUpdatingChannelIds((current) => {
         const next = { ...current };
@@ -280,16 +335,10 @@ export default function AdminPage() {
     [searchTerm, users]
   );
 
-  const filteredChannels = useMemo(
-    () =>
-      channels.filter(
-        (channel) =>
-          channel.title.toLowerCase().includes(channelSearchTerm.toLowerCase()) ||
-          channel.channel_url.toLowerCase().includes(channelSearchTerm.toLowerCase()) ||
-          channel.channel_id.toLowerCase().includes(channelSearchTerm.toLowerCase())
-      ),
-    [channelSearchTerm, channels]
-  );
+  const channelSummary =
+    channelTotal === null
+      ? "Danh sách kênh đang đóng, chưa tải dữ liệu"
+      : `Đã tải ${channels.length}/${channelTotal} kênh trong hệ thống`;
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
@@ -313,19 +362,28 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {message && (
-        <div
-          className={`flex items-center gap-3 rounded-xl border p-4 ${
-            message.type === "success"
-              ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-              : "border-red-100 bg-red-50 text-red-700"
-          }`}
-        >
-          {message.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-          <span className="font-medium">{message.text}</span>
-          <button onClick={() => setMessage(null)} className="ml-auto opacity-50 hover:opacity-100">
-            <X size={16} />
-          </button>
+      {toast && (
+        <div className="fixed right-4 top-4 z-[70] w-[calc(100vw-2rem)] max-w-md">
+          <div
+            className={`flex items-start gap-3 rounded-xl border bg-white p-4 shadow-xl ${
+              toast.type === "success"
+                ? "border-emerald-100 text-emerald-700"
+                : "border-red-100 text-red-700"
+            }`}
+          >
+            {toast.type === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            )}
+            <span className="text-sm font-medium leading-6">{toast.text}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-auto rounded-lg p-1 opacity-50 transition-opacity hover:opacity-100"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -438,39 +496,53 @@ export default function AdminPage() {
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/50 p-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
               <Database className="h-5 w-5 text-indigo-600" />
               Quản lý kênh
             </h2>
-            <p className="mt-1 text-sm text-slate-500">Tổng cộng {channels.length} kênh trong hệ thống</p>
+            <p className="mt-1 text-sm text-slate-500">{channelSummary}</p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input
-                type="text"
-                placeholder="Tìm theo tên, đường dẫn hoặc mã kênh..."
-                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                value={channelSearchTerm}
-                onChange={(event) => setChannelSearchTerm(event.target.value)}
-              />
-            </div>
-            <button
-              onClick={() => setConfirmState({ type: "update-all-channels" })}
-              disabled={updatingAllChannels || loadingChannels || channels.length === 0}
-              className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {updatingAllChannels ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Cập nhật toàn bộ
-            </button>
-          </div>
+          <button
+            onClick={() => setChannelsExpanded((current) => !current)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            {channelsExpanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+            {channelsExpanded ? "Đóng danh sách" : "Mở quản lý kênh"}
+          </button>
         </div>
+
+        {channelsExpanded && (
+          <>
+            <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative w-full sm:w-96">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên, đường dẫn hoặc mã kênh..."
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  value={channelSearchTerm}
+                  onChange={(event) => setChannelSearchTerm(event.target.value)}
+                />
+              </div>
+              <button
+                onClick={() => setConfirmState({ type: "update-all-channels" })}
+                disabled={updatingAllChannels || loadingChannels || channelTotal === 0}
+                className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {updatingAllChannels ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Cập nhật toàn bộ
+              </button>
+            </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -516,7 +588,7 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ))
-                : filteredChannels.map((channel) => {
+                : channels.map((channel) => {
                     const isUpdating = Boolean(updatingChannelIds[channel.id]);
 
                     return (
@@ -622,10 +694,25 @@ export default function AdminPage() {
                   })}
             </tbody>
           </table>
-          {!loadingChannels && filteredChannels.length === 0 && (
+          {!loadingChannels && channels.length === 0 && (
             <div className="p-12 text-center text-slate-500">Không tìm thấy kênh nào phù hợp</div>
           )}
-        </div>
+            </div>
+
+            {channelHasMore && (
+              <div className="flex justify-center border-t border-slate-100 p-4">
+                <button
+                  onClick={() => void fetchChannels()}
+                  disabled={loadingMoreChannels}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loadingMoreChannels && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Tải thêm
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {isModalOpen && (
@@ -767,7 +854,7 @@ export default function AdminPage() {
           confirmState?.type === "delete-user"
             ? `Bạn có chắc chắn muốn xoá tài khoản "${confirmState.user.email || confirmState.user.name}"?`
             : confirmState?.type === "update-all-channels"
-              ? `Cập nhật toàn bộ ${channels.length} kênh? Hệ thống sẽ bỏ qua kênh đã cập nhật hôm nay và giãn 10 phút giữa mỗi kênh cần cập nhật.`
+              ? `Cập nhật toàn bộ ${channelTotal ?? "các"} kênh? Hệ thống sẽ bỏ qua kênh đã cập nhật hôm nay và giãn 10 phút giữa mỗi kênh cần cập nhật.`
               : confirmState?.type === "delete-channel"
                 ? `Xóa kênh "${confirmState.channel.title}" khỏi hệ thống? Kênh này cũng sẽ bị gỡ khỏi mọi nhóm đang liên kết.`
                 : ""

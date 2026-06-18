@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Eye, Video, Users, TrendingUp, Clock, ExternalLink, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, Video, Users, TrendingUp, Clock, ExternalLink, Trash2 } from "lucide-react";
 import { removeChannelFromGroup } from "@/app/actions/channelActions";
 import { useState, useTransition } from "react";
 import ActionMenu from "./ActionMenu";
@@ -48,6 +48,9 @@ export default function CompareTable({
 }) {
   const [isPending, startTransition] = useTransition();
   const [deletingChannel, setDeletingChannel] = useState<{id: string, title: string} | null>(null);
+  const [showAllChannels, setShowAllChannels] = useState(false);
+  const hasHiddenChannels = channels.length > 5;
+  const visibleChannels = hasHiddenChannels && !showAllChannels ? channels.slice(0, 5) : channels;
 
   const handleConfirmDelete = () => {
     if (!deletingChannel) return;
@@ -123,7 +126,7 @@ export default function CompareTable({
             </tr>
           </thead>
           <tbody>
-            {channels.map((channel) => (
+            {visibleChannels.map((channel) => (
               <tr
                 key={channel.id}
                 className="group border-b border-slate-50 transition-colors last:border-0 hover:bg-indigo-50/30"
@@ -205,6 +208,22 @@ export default function CompareTable({
           </tbody>
         </table>
       </div>
+
+      {hasHiddenChannels && (
+        <div className="flex justify-center border-t border-slate-100 px-4 py-3">
+          <button
+            onClick={() => setShowAllChannels((current) => !current)}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            {showAllChannels ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+            {showAllChannels ? "Đóng" : `Xem đầy đủ ${channels.length} kênh`}
+          </button>
+        </div>
+      )}
 
       <ConfirmModal
         isOpen={!!deletingChannel}
