@@ -15,6 +15,9 @@ const CHANNEL_ADMIN_UPDATE_BATCH_JITTER_MS = 30 * 1000;
 const CHANNEL_UPDATE_DATE_TIME_ZONE = process.env.CHANNEL_UPDATE_DATE_TIME_ZONE ?? "Asia/Ho_Chi_Minh";
 const ADMIN_CHANNELS_PAGE_SIZE = 25;
 
+type ChannelWriteClient = Pick<Prisma.TransactionClient, "channel" | "dailyStat" | "groupChannel" | "monthlyStat">;
+type ChannelUpdateStatus = "SUCCESS" | "YOUTUBE_FAILED" | "VIDIQ_FAILED";
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -229,8 +232,8 @@ async function findExistingChannelFromUrl(url: string) {
   });
 }
 
-async function linkChannelToGroup(channelId: string, groupId: string) {
-  return prisma.groupChannel.upsert({
+async function linkChannelToGroup(channelId: string, groupId: string, db: ChannelWriteClient = prisma) {
+  return db.groupChannel.upsert({
     where: {
       groupId_channelId: {
         groupId,
@@ -245,9 +248,13 @@ async function linkChannelToGroup(channelId: string, groupId: string) {
   });
 }
 
-async function persistVidiqStats(channelId: string, vidiqData: Awaited<ReturnType<typeof getVidiqStats>>) {
+async function persistVidiqStats(
+  db: ChannelWriteClient,
+  channelId: string,
+  vidiqData: Awaited<ReturnType<typeof getVidiqStats>>
+) {
   for (const stat of vidiqData.dailyStats) {
-    await prisma.dailyStat.upsert({
+    await db.dailyStat.upsert({
       where: {
         channelId_date_str: {
           channelId,
@@ -272,7 +279,7 @@ async function persistVidiqStats(channelId: string, vidiqData: Awaited<ReturnTyp
   }
 
   for (const monthlyStat of vidiqData.monthlyStats) {
-    await prisma.monthlyStat.upsert({
+    await db.monthlyStat.upsert({
       where: {
         channelId_month: {
           channelId,
@@ -295,6 +302,15 @@ async function persistVidiqStats(channelId: string, vidiqData: Awaited<ReturnTyp
       },
     });
   }
+}
+
+async function recordChannelUpdateFailure(channelId: string, attemptedAt: Date, status: Exclude<ChannelUpdateStatus, "SUCCESS">) {
+  await prisma.$executeRaw`
+    UPDATE "channels"
+    SET "lastUpdateAttemptAt" = ${attemptedAt},
+        "lastUpdateStatus" = ${status}
+    WHERE "id" = ${channelId}
+  `;
 }
 
 async function revalidateChannelUsage(channelId: string) {
@@ -329,19 +345,11 @@ async function refreshChannelData(channel: {
       getUploadFrequency(channel.channel_id),
     ]);
   } catch (youtubeError) {
-    await prisma.channel.update({
-      where: { id: channel.id },
-      data: {
-        lastUpdateAttemptAt: attemptedAt,
-        lastUpdateStatus: "YOUTUBE_FAILED",
-        updatedAt: channel.updatedAt,
-      },
-    });
+    await recordChannelUpdateFailure(channel.id, attemptedAt, "YOUTUBE_FAILED");
     throw youtubeError;
   }
 
   let vidiqData: Awaited<ReturnType<typeof getVidiqStats>> | null = null;
-  let warning: string | undefined;
   const shouldFetchVidiq = !channel.vidiqUpdatedAt || !wasUpdatedToday(channel.vidiqUpdatedAt);
 
   if (shouldFetchVidiq) {
@@ -349,44 +357,49 @@ async function refreshChannelData(channel: {
       vidiqData = await getVidiqStats(channel.channel_id);
     } catch (vidiqError) {
       console.error("VidIQ fetch failed while refreshing channel:", vidiqError);
-      warning = "Đã cập nhật thông tin chính, nhưng chưa lấy được một phần dữ liệu tăng trưởng.";
+      await recordChannelUpdateFailure(channel.id, attemptedAt, "VIDIQ_FAILED");
+      throw vidiqError;
     }
   }
 
   const vidiqSucceededOrAlreadyFresh = Boolean(vidiqData || !shouldFetchVidiq);
-  const updatedChannel = await prisma.channel.update({
-    where: { id: channel.id },
-    data: {
-      title: youtubeStats.title,
-      logo_url: youtubeStats.logo_url,
-      subscriberCount: youtubeStats.subscriberCount,
-      videoCount: youtubeStats.videoCount,
-      viewCount: youtubeStats.viewCount,
-      uploadFrequency: uploadFreq,
-      views30Days: vidiqData?.views30Days ?? channel.views30Days,
-      youtubeUpdatedAt: attemptedAt,
-      vidiqUpdatedAt: vidiqData ? attemptedAt : channel.vidiqUpdatedAt,
-      lastUpdateAttemptAt: attemptedAt,
-      lastUpdateStatus: vidiqSucceededOrAlreadyFresh ? "SUCCESS" : "VIDIQ_FAILED",
-      updatedAt: vidiqSucceededOrAlreadyFresh ? attemptedAt : channel.updatedAt,
-    },
-    include: {
-      _count: {
-        select: { groups: true },
+  const updatedChannel = await prisma.$transaction(async (tx) => {
+    const updated = await tx.channel.update({
+      where: { id: channel.id },
+      data: {
+        title: youtubeStats.title,
+        logo_url: youtubeStats.logo_url,
+        subscriberCount: youtubeStats.subscriberCount,
+        videoCount: youtubeStats.videoCount,
+        viewCount: youtubeStats.viewCount,
+        uploadFrequency: uploadFreq,
+        views30Days: vidiqData?.views30Days ?? channel.views30Days,
+        youtubeUpdatedAt: attemptedAt,
+        vidiqUpdatedAt: vidiqData ? attemptedAt : channel.vidiqUpdatedAt,
+        lastUpdateAttemptAt: attemptedAt,
+        lastUpdateStatus: vidiqSucceededOrAlreadyFresh ? "SUCCESS" : "VIDIQ_FAILED",
+        updatedAt: vidiqSucceededOrAlreadyFresh ? attemptedAt : channel.updatedAt,
       },
-    },
-  });
+      include: {
+        _count: {
+          select: { groups: true },
+        },
+      },
+    });
 
-  if (vidiqData) {
-    await persistVidiqStats(channel.id, vidiqData);
-  }
+    if (vidiqData) {
+      await persistVidiqStats(tx, channel.id, vidiqData);
+    }
+
+    return updated;
+  });
 
   await revalidateChannelUsage(channel.id);
 
   return {
     channel: serializeAdminChannel(updatedChannel),
     skipped: false,
-    warning,
+    warning: undefined,
   };
 }
 
@@ -534,42 +547,36 @@ export async function addChannelToGroup(url: string, groupId: string) {
 
     const attemptedAt = new Date();
 
-    // 3. Upsert the channel record so existing channels stay up to date.
-    const channel = await prisma.channel.upsert({
-      where: { channel_id: youtubeChannelId },
-      update: {
-        title: youtubeStats.title,
-        logo_url: youtubeStats.logo_url,
-        subscriberCount: youtubeStats.subscriberCount,
-        videoCount: youtubeStats.videoCount,
-        viewCount: youtubeStats.viewCount,
-        uploadFrequency: uploadFreq,
-        views30Days: vidiqData?.views30Days ?? 0,
-        youtubeUpdatedAt: attemptedAt,
-        vidiqUpdatedAt: vidiqData ? attemptedAt : undefined,
-        lastUpdateAttemptAt: attemptedAt,
-        lastUpdateStatus: vidiqData ? "SUCCESS" : "VIDIQ_FAILED",
-        updatedAt: vidiqData ? attemptedAt : undefined,
-      },
-      create: {
-        channel_id: youtubeChannelId,
-        channel_url: url.includes("youtube.com") ? url : `https://www.youtube.com/channel/${youtubeChannelId}`,
-        title: youtubeStats.title,
-        logo_url: youtubeStats.logo_url,
-        subscriberCount: youtubeStats.subscriberCount,
-        videoCount: youtubeStats.videoCount,
-        viewCount: youtubeStats.viewCount,
-        uploadFrequency: uploadFreq,
-        views30Days: vidiqData?.views30Days ?? 0,
-        youtubeUpdatedAt: attemptedAt,
-        vidiqUpdatedAt: vidiqData ? attemptedAt : undefined,
-        lastUpdateAttemptAt: attemptedAt,
-        lastUpdateStatus: vidiqData ? "SUCCESS" : "VIDIQ_FAILED",
-      },
-    });
+    // 3. Create/link the channel atomically. If the channel already exists, do not overwrite its old stats here.
+    const channel = await prisma.$transaction(async (tx) => {
+      const upsertedChannel = await tx.channel.upsert({
+        where: { channel_id: youtubeChannelId },
+        update: {},
+        create: {
+          channel_id: youtubeChannelId,
+          channel_url: url.includes("youtube.com") ? url : `https://www.youtube.com/channel/${youtubeChannelId}`,
+          title: youtubeStats.title,
+          logo_url: youtubeStats.logo_url,
+          subscriberCount: youtubeStats.subscriberCount,
+          videoCount: youtubeStats.videoCount,
+          viewCount: youtubeStats.viewCount,
+          uploadFrequency: uploadFreq,
+          views30Days: vidiqData?.views30Days ?? 0,
+          youtubeUpdatedAt: attemptedAt,
+          vidiqUpdatedAt: vidiqData ? attemptedAt : undefined,
+          lastUpdateAttemptAt: attemptedAt,
+          lastUpdateStatus: vidiqData ? "SUCCESS" : "VIDIQ_FAILED",
+        },
+      });
 
-    // 4. Link the channel to the selected comparison group.
-    await linkChannelToGroup(channel.id, groupId);
+      await linkChannelToGroup(upsertedChannel.id, groupId, tx);
+
+      if (vidiqData) {
+        await persistVidiqStats(tx, upsertedChannel.id, vidiqData);
+      }
+
+      return upsertedChannel;
+    });
 
     logChannelImport("info", "add:channel-upserted-and-linked", {
       url,
@@ -580,9 +587,8 @@ export async function addChannelToGroup(url: string, groupId: string) {
       title: channel.title,
     });
 
-    // 5. Persist VidIQ stats only when the API succeeds.
+    // 5. VidIQ stats are persisted in the transaction above only when the API succeeds.
     if (vidiqData) {
-      await persistVidiqStats(channel.id, vidiqData);
       logChannelImport("info", "add:vidiq-stats-persisted", {
         url,
         normalizedUrl,

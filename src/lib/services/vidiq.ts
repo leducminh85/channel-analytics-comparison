@@ -224,8 +224,13 @@ async function fetchVidiqStatsWithToken(channelId: string, token: string, tokenL
   }
 
   const data = await response.json();
-  const dailyData: VidiqDailyStat[] = data.daily_stats || [];
-  const monthlyRaw = data.monthly_stats || [];
+  const dailyData: VidiqDailyStat[] = Array.isArray(data.daily_stats) ? data.daily_stats : [];
+  const monthlyRaw = Array.isArray(data.monthly_stats) ? data.monthly_stats : [];
+
+  if (dailyData.length === 0 && monthlyRaw.length === 0) {
+    throw new Error(`VidIQ API Error (${tokenLabel}): response missing stats data`);
+  }
+
   const currentTotalViews = data.current_stats?.views?.count || 0;
   const currentSubsCount = data.current_stats?.subscribers?.count || 0;
 
