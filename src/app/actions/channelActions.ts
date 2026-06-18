@@ -357,8 +357,35 @@ async function refreshChannelData(channel: {
       vidiqData = await getVidiqStats(channel.channel_id);
     } catch (vidiqError) {
       console.error("VidIQ fetch failed while refreshing channel:", vidiqError);
-      await recordChannelUpdateFailure(channel.id, attemptedAt, "VIDIQ_FAILED");
-      throw vidiqError;
+
+      const updatedChannel = await prisma.channel.update({
+        where: { id: channel.id },
+        data: {
+          title: youtubeStats.title,
+          logo_url: youtubeStats.logo_url,
+          subscriberCount: youtubeStats.subscriberCount,
+          videoCount: youtubeStats.videoCount,
+          viewCount: youtubeStats.viewCount,
+          uploadFrequency: uploadFreq,
+          youtubeUpdatedAt: attemptedAt,
+          lastUpdateAttemptAt: attemptedAt,
+          lastUpdateStatus: "VIDIQ_FAILED",
+          updatedAt: channel.updatedAt,
+        },
+        include: {
+          _count: {
+            select: { groups: true },
+          },
+        },
+      });
+
+      await revalidateChannelUsage(channel.id);
+
+      return {
+        channel: serializeAdminChannel(updatedChannel),
+        skipped: false,
+        warning: getErrorMessage(vidiqError, "VidIQ lỗi, đã giữ nguyên dữ liệu tăng trưởng cũ."),
+      };
     }
   }
 
