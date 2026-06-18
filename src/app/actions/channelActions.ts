@@ -8,7 +8,9 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { getSessionUserId, requireGroupAccess } from "@/lib/groupAccess";
 
-const CHANNEL_BATCH_DELAY_MS = 3000;
+const CHANNEL_IMPORT_BATCH_DELAY_MS = 3000;
+const CHANNEL_ADMIN_UPDATE_BATCH_DELAY_MS = 10 * 60 * 1000;
+const CHANNEL_UPDATE_DATE_TIME_ZONE = process.env.CHANNEL_UPDATE_DATE_TIME_ZONE ?? "Asia/Ho_Chi_Minh";
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -16,6 +18,32 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getDateKey(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+function getChannelUpdateDateKey(date: Date) {
+  try {
+    return getDateKey(date, CHANNEL_UPDATE_DATE_TIME_ZONE);
+  } catch {
+    return getDateKey(date, "UTC");
+  }
+}
+
+function wasUpdatedToday(updatedAt: Date) {
+  return getChannelUpdateDateKey(updatedAt) === getChannelUpdateDateKey(new Date());
 }
 
 function getErrorLog(error: unknown) {
@@ -306,6 +334,7 @@ async function refreshChannelData(channel: {
 
   return {
     channel: serializeAdminChannel(updatedChannel),
+    skipped: false,
     warning,
   };
 }
@@ -542,16 +571,23 @@ export async function updateAdminChannel(channelId: string) {
 
   const channel = await prisma.channel.findUnique({
     where: { id: channelId },
-    select: {
-      id: true,
-      channel_id: true,
-      channel_url: true,
-      views30Days: true,
+    include: {
+      _count: {
+        select: { groups: true },
+      },
     },
   });
 
   if (!channel) {
     throw new Error("Không tìm thấy kênh trong hệ thống");
+  }
+
+  if (wasUpdatedToday(channel.updatedAt)) {
+    return {
+      channel: serializeAdminChannel(channel),
+      skipped: true,
+      warning: undefined,
+    };
   }
 
   return refreshChannelData(channel);
@@ -567,6 +603,7 @@ export async function updateAllAdminChannels() {
       channel_url: true,
       title: true,
       views30Days: true,
+      updatedAt: true,
     },
     orderBy: {
       updatedAt: "asc",
@@ -574,12 +611,21 @@ export async function updateAllAdminChannels() {
   });
 
   let updated = 0;
+  let skipped = 0;
+  let attempted = 0;
   const failed: Array<{ channelId: string; title: string; message: string }> = [];
 
-  for (const [index, channel] of channels.entries()) {
-    if (index > 0) {
-      await delay(CHANNEL_BATCH_DELAY_MS);
+  for (const channel of channels) {
+    if (wasUpdatedToday(channel.updatedAt)) {
+      skipped += 1;
+      continue;
     }
+
+    if (attempted > 0) {
+      await delay(CHANNEL_ADMIN_UPDATE_BATCH_DELAY_MS);
+    }
+
+    attempted += 1;
 
     try {
       await refreshChannelData(channel);
@@ -599,6 +645,7 @@ export async function updateAllAdminChannels() {
   return {
     total: channels.length,
     updated,
+    skipped,
     failed,
   };
 }
@@ -731,7 +778,7 @@ export async function importChannelsToGroup(inputs: string[], groupId: string) {
 
     try {
       if (item.status === "ready" && fetchedChannelCount > 0) {
-        await delay(CHANNEL_BATCH_DELAY_MS);
+        await delay(CHANNEL_IMPORT_BATCH_DELAY_MS);
       }
 
       const result = await addChannelToGroup(item.normalizedUrl || item.input, groupId);

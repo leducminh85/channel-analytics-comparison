@@ -14,7 +14,6 @@ import MonthlyViewsChart from "@/components/MonthlyViewsChart";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import GroupActionMenu from "@/components/GroupActionMenu";
-import CompareGroupChatbot from "@/components/CompareGroupChatbot";
 
 type DailyStat = {
   date_str: string;
@@ -132,8 +131,6 @@ export default async function GroupDetailPage({
           <MonthlyViewsChart channels={channels} />
         </>
       )}
-
-      <CompareGroupChatbot groupId={id} />
     </div>
   );
 }

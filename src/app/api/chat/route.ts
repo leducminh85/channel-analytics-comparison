@@ -17,6 +17,7 @@ import { getAccessibleGroupWhere } from "@/lib/groupAccess";
 
 export const runtime = "nodejs";
 
+const CHAT_FEATURE_ENABLED = process.env.AI_CHAT_FEATURE_ENABLED === "true";
 const ollamaBaseUrl = `${(process.env.OLLAMA_BASE_URL ?? "http://localhost:11434").replace(
   /\/$/,
   ""
@@ -552,6 +553,10 @@ Hay tra loi ngay cau hoi tren. Dung so lieu cu the, khong lap lai noi dung nguon
 }
 
 export async function POST(request: Request) {
+  if (!CHAT_FEATURE_ENABLED) {
+    return Response.json({ error: "Chat feature is disabled" }, { status: 503 });
+  }
+
   try {
     const session = await getServerSession(authOptions);
     const userId = (session?.user as { id?: string } | undefined)?.id;

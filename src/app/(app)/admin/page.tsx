@@ -61,6 +61,8 @@ type ConfirmState =
   | { type: "delete-channel"; channel: AdminChannel }
   | null;
 
+const CHANNEL_UPDATE_DATE_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -70,6 +72,12 @@ function formatNumber(num: number) {
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
   if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
   return num.toLocaleString("vi-VN");
+}
+
+function formatDate(value: string | Date) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleDateString("vi-VN", { timeZone: CHANNEL_UPDATE_DATE_TIME_ZONE });
 }
 
 export default function AdminPage() {
@@ -185,7 +193,9 @@ export default function AdminPage() {
       );
       setMessage({
         type: result.warning ? "error" : "success",
-        text: result.warning || `Đã cập nhật kênh ${result.channel.title}`,
+        text: result.skipped
+          ? `Kênh ${result.channel.title} đã được cập nhật hôm nay, bỏ qua.`
+          : result.warning || `Đã cập nhật kênh ${result.channel.title}`,
       });
     } catch (error: unknown) {
       setMessage({ type: "error", text: getErrorMessage(error, "Không thể cập nhật kênh") });
@@ -208,6 +218,9 @@ export default function AdminPage() {
     try {
       const result = await updateAllAdminChannels();
       await fetchChannels();
+      const skippedText =
+        result.skipped > 0 ? `, bỏ qua ${result.skipped} kênh đã cập nhật hôm nay` : "";
+      const summaryText = `Đã cập nhật ${result.updated}/${result.total} kênh${skippedText}`;
 
       if (result.failed.length > 0) {
         const failedText = result.failed
@@ -217,10 +230,10 @@ export default function AdminPage() {
         const suffix = result.failed.length > 3 ? `; và ${result.failed.length - 3} kênh khác` : "";
         setMessage({
           type: "error",
-          text: `Đã cập nhật ${result.updated}/${result.total} kênh. Lỗi: ${failedText}${suffix}`,
+          text: `${summaryText}. Lỗi: ${failedText}${suffix}`,
         });
       } else {
-        setMessage({ type: "success", text: `Đã cập nhật ${result.updated}/${result.total} kênh` });
+        setMessage({ type: "success", text: summaryText });
       }
     } catch (error: unknown) {
       setMessage({ type: "error", text: getErrorMessage(error, "Không thể cập nhật toàn bộ kênh") });
@@ -469,6 +482,7 @@ export default function AdminPage() {
                 <th className="px-5 py-4 text-right">Subscriber</th>
                 <th className="px-5 py-4 text-right">Views (30 ngày)</th>
                 <th className="px-5 py-4">Chu kỳ đăng</th>
+                <th className="px-5 py-4">Cập nhật gần nhất</th>
                 <th className="px-5 py-4 text-right">Thao tác</th>
               </tr>
             </thead>
@@ -490,6 +504,9 @@ export default function AdminPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="ml-auto h-6 w-20 rounded bg-slate-100" />
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="h-6 w-28 rounded bg-slate-100" />
                       </td>
                       <td className="px-5 py-4">
                         <div className="h-6 w-28 rounded bg-slate-100" />
@@ -568,6 +585,12 @@ export default function AdminPage() {
                           <span className="inline-flex items-center gap-1.5">
                             <Clock className="h-3.5 w-3.5 text-slate-400" />
                             {channel.uploadFrequency || "N/A"}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
+                          <span className="inline-flex items-center gap-1.5">
+                            <RefreshCw className="h-3.5 w-3.5 text-slate-400" />
+                            {formatDate(channel.updatedAt)}
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 text-right">
@@ -744,7 +767,7 @@ export default function AdminPage() {
           confirmState?.type === "delete-user"
             ? `Bạn có chắc chắn muốn xoá tài khoản "${confirmState.user.email || confirmState.user.name}"?`
             : confirmState?.type === "update-all-channels"
-              ? `Cập nhật toàn bộ ${channels.length} kênh? Quá trình này sẽ lấy dữ liệu mới và cách nhau khoảng 3 giây cho mỗi kênh.`
+              ? `Cập nhật toàn bộ ${channels.length} kênh? Hệ thống sẽ bỏ qua kênh đã cập nhật hôm nay và giãn 10 phút giữa mỗi kênh cần cập nhật.`
               : confirmState?.type === "delete-channel"
                 ? `Xóa kênh "${confirmState.channel.title}" khỏi hệ thống? Kênh này cũng sẽ bị gỡ khỏi mọi nhóm đang liên kết.`
                 : ""
