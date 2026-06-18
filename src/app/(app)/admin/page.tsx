@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getUsers, createUser, deleteUser, resetPassword } from "@/app/actions/userActions";
 import {
   deleteAdminChannel,
@@ -117,6 +117,7 @@ export default function AdminPage() {
   const [role, setRole] = useState("USER");
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const channelLoadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -128,16 +129,6 @@ export default function AdminPage() {
     const timeoutId = window.setTimeout(() => setToast(null), 5000);
     return () => window.clearTimeout(timeoutId);
   }, [toast]);
-
-  useEffect(() => {
-    if (!channelsExpanded) return;
-
-    const timeoutId = window.setTimeout(() => {
-      void fetchChannels({ reset: true });
-    }, 300);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [channelSearchTerm, channelsExpanded]);
 
   async function fetchUsers() {
     setLoadingUsers(true);
@@ -151,7 +142,7 @@ export default function AdminPage() {
     }
   }
 
-  async function fetchChannels({ reset = false }: { reset?: boolean } = {}) {
+  const fetchChannels = useCallback(async ({ reset = false }: { reset?: boolean } = {}) => {
     if (!reset && !channelHasMore) return;
 
     if (reset) {
@@ -180,7 +171,34 @@ export default function AdminPage() {
         setLoadingMoreChannels(false);
       }
     }
-  }
+  }, [channelHasMore, channelNextCursor, channelSearchTerm]);
+
+  useEffect(() => {
+    if (!channelsExpanded) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void fetchChannels({ reset: true });
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [channelSearchTerm, channelsExpanded]);
+
+  useEffect(() => {
+    const target = channelLoadMoreRef.current;
+    if (!target || !channelsExpanded || !channelHasMore || loadingChannels || loadingMoreChannels) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void fetchChannels();
+        }
+      },
+      { rootMargin: "240px 0px" }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [channelHasMore, channelsExpanded, fetchChannels, loadingChannels, loadingMoreChannels]);
 
   const handleCreateUser = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -700,15 +718,14 @@ export default function AdminPage() {
             </div>
 
             {channelHasMore && (
-              <div className="flex justify-center border-t border-slate-100 p-4">
-                <button
-                  onClick={() => void fetchChannels()}
-                  disabled={loadingMoreChannels}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {loadingMoreChannels && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Tải thêm
-                </button>
+              <div
+                ref={channelLoadMoreRef}
+                className="flex min-h-16 items-center justify-center border-t border-slate-100 p-4 text-sm text-slate-500"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Đang tải thêm kênh...
+                </span>
               </div>
             )}
           </>
