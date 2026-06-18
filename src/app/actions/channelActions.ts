@@ -10,7 +10,8 @@ import { getSessionUserId, requireGroupAccess } from "@/lib/groupAccess";
 import type { Prisma } from "@prisma/client";
 
 const CHANNEL_IMPORT_BATCH_DELAY_MS = 3000;
-const CHANNEL_ADMIN_UPDATE_BATCH_DELAY_MS = 10 * 60 * 1000;
+const CHANNEL_ADMIN_UPDATE_BATCH_DELAY_MS = 60 * 1000;
+const CHANNEL_ADMIN_UPDATE_BATCH_JITTER_MS = 30 * 1000;
 const CHANNEL_UPDATE_DATE_TIME_ZONE = process.env.CHANNEL_UPDATE_DATE_TIME_ZONE ?? "Asia/Ho_Chi_Minh";
 const ADMIN_CHANNELS_PAGE_SIZE = 25;
 
@@ -20,6 +21,10 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getAdminBatchDelayMs() {
+  return CHANNEL_ADMIN_UPDATE_BATCH_DELAY_MS + Math.floor(Math.random() * CHANNEL_ADMIN_UPDATE_BATCH_JITTER_MS);
 }
 
 function getDateKey(date: Date, timeZone: string) {
@@ -46,6 +51,15 @@ function getChannelUpdateDateKey(date: Date) {
 
 function wasUpdatedToday(updatedAt: Date) {
   return getChannelUpdateDateKey(updatedAt) === getChannelUpdateDateKey(new Date());
+}
+
+function wasFullyUpdatedToday(channel: {
+  updatedAt: Date;
+  youtubeUpdatedAt?: Date | null;
+  vidiqUpdatedAt?: Date | null;
+}) {
+  const youtubeUpdatedAt = channel.youtubeUpdatedAt ?? channel.updatedAt;
+  return wasUpdatedToday(youtubeUpdatedAt) && Boolean(channel.vidiqUpdatedAt && wasUpdatedToday(channel.vidiqUpdatedAt));
 }
 
 function getErrorLog(error: unknown) {
@@ -112,6 +126,10 @@ type ChannelForAdmin = {
   views30Days: bigint;
   createdAt: Date;
   updatedAt: Date;
+  youtubeUpdatedAt: Date | null;
+  vidiqUpdatedAt: Date | null;
+  lastUpdateAttemptAt: Date | null;
+  lastUpdateStatus: string | null;
   _count?: {
     groups: number;
   };
@@ -147,6 +165,10 @@ function serializeAdminChannel(channel: ChannelForAdmin) {
     groupsCount: channel._count?.groups ?? 0,
     createdAt: channel.createdAt.toISOString(),
     updatedAt: channel.updatedAt.toISOString(),
+    youtubeUpdatedAt: channel.youtubeUpdatedAt?.toISOString() ?? null,
+    vidiqUpdatedAt: channel.vidiqUpdatedAt?.toISOString() ?? null,
+    lastUpdateAttemptAt: channel.lastUpdateAttemptAt?.toISOString() ?? null,
+    lastUpdateStatus: channel.lastUpdateStatus,
   };
 }
 
@@ -293,22 +315,45 @@ async function refreshChannelData(channel: {
   channel_id: string;
   channel_url: string;
   views30Days: bigint;
+  updatedAt: Date;
+  youtubeUpdatedAt?: Date | null;
+  vidiqUpdatedAt?: Date | null;
 }) {
-  const [youtubeStats, uploadFreq] = await Promise.all([
-    getChannelStats(channel.channel_id),
-    getUploadFrequency(channel.channel_id),
-  ]);
+  const attemptedAt = new Date();
+  let youtubeStats: Awaited<ReturnType<typeof getChannelStats>>;
+  let uploadFreq: Awaited<ReturnType<typeof getUploadFrequency>>;
+
+  try {
+    [youtubeStats, uploadFreq] = await Promise.all([
+      getChannelStats(channel.channel_id),
+      getUploadFrequency(channel.channel_id),
+    ]);
+  } catch (youtubeError) {
+    await prisma.channel.update({
+      where: { id: channel.id },
+      data: {
+        lastUpdateAttemptAt: attemptedAt,
+        lastUpdateStatus: "YOUTUBE_FAILED",
+        updatedAt: channel.updatedAt,
+      },
+    });
+    throw youtubeError;
+  }
 
   let vidiqData: Awaited<ReturnType<typeof getVidiqStats>> | null = null;
   let warning: string | undefined;
+  const shouldFetchVidiq = !channel.vidiqUpdatedAt || !wasUpdatedToday(channel.vidiqUpdatedAt);
 
-  try {
-    vidiqData = await getVidiqStats(channel.channel_id);
-  } catch (vidiqError) {
-    console.error("VidIQ fetch failed while refreshing channel:", vidiqError);
-    warning = "Đã cập nhật thông tin chính, nhưng chưa lấy được một phần dữ liệu tăng trưởng.";
+  if (shouldFetchVidiq) {
+    try {
+      vidiqData = await getVidiqStats(channel.channel_id);
+    } catch (vidiqError) {
+      console.error("VidIQ fetch failed while refreshing channel:", vidiqError);
+      warning = "Đã cập nhật thông tin chính, nhưng chưa lấy được một phần dữ liệu tăng trưởng.";
+    }
   }
 
+  const vidiqSucceededOrAlreadyFresh = Boolean(vidiqData || !shouldFetchVidiq);
   const updatedChannel = await prisma.channel.update({
     where: { id: channel.id },
     data: {
@@ -319,7 +364,11 @@ async function refreshChannelData(channel: {
       viewCount: youtubeStats.viewCount,
       uploadFrequency: uploadFreq,
       views30Days: vidiqData?.views30Days ?? channel.views30Days,
-      updatedAt: new Date(),
+      youtubeUpdatedAt: attemptedAt,
+      vidiqUpdatedAt: vidiqData ? attemptedAt : channel.vidiqUpdatedAt,
+      lastUpdateAttemptAt: attemptedAt,
+      lastUpdateStatus: vidiqSucceededOrAlreadyFresh ? "SUCCESS" : "VIDIQ_FAILED",
+      updatedAt: vidiqSucceededOrAlreadyFresh ? attemptedAt : channel.updatedAt,
     },
     include: {
       _count: {
@@ -483,6 +532,8 @@ export async function addChannelToGroup(url: string, groupId: string) {
       warning = "Kênh đã được thêm, nhưng chưa lấy được một phần dữ liệu tăng trưởng.";
     }
 
+    const attemptedAt = new Date();
+
     // 3. Upsert the channel record so existing channels stay up to date.
     const channel = await prisma.channel.upsert({
       where: { channel_id: youtubeChannelId },
@@ -494,7 +545,11 @@ export async function addChannelToGroup(url: string, groupId: string) {
         viewCount: youtubeStats.viewCount,
         uploadFrequency: uploadFreq,
         views30Days: vidiqData?.views30Days ?? 0,
-        updatedAt: new Date(),
+        youtubeUpdatedAt: attemptedAt,
+        vidiqUpdatedAt: vidiqData ? attemptedAt : undefined,
+        lastUpdateAttemptAt: attemptedAt,
+        lastUpdateStatus: vidiqData ? "SUCCESS" : "VIDIQ_FAILED",
+        updatedAt: vidiqData ? attemptedAt : undefined,
       },
       create: {
         channel_id: youtubeChannelId,
@@ -506,6 +561,10 @@ export async function addChannelToGroup(url: string, groupId: string) {
         viewCount: youtubeStats.viewCount,
         uploadFrequency: uploadFreq,
         views30Days: vidiqData?.views30Days ?? 0,
+        youtubeUpdatedAt: attemptedAt,
+        vidiqUpdatedAt: vidiqData ? attemptedAt : undefined,
+        lastUpdateAttemptAt: attemptedAt,
+        lastUpdateStatus: vidiqData ? "SUCCESS" : "VIDIQ_FAILED",
       },
     });
 
@@ -634,7 +693,7 @@ export async function updateAdminChannel(channelId: string) {
     throw new Error("Không tìm thấy kênh trong hệ thống");
   }
 
-  if (wasUpdatedToday(channel.updatedAt)) {
+  if (wasFullyUpdatedToday(channel)) {
     return {
       channel: serializeAdminChannel(channel),
       skipped: true,
@@ -656,6 +715,8 @@ export async function updateAllAdminChannels() {
       title: true,
       views30Days: true,
       updatedAt: true,
+      youtubeUpdatedAt: true,
+      vidiqUpdatedAt: true,
     },
     orderBy: {
       updatedAt: "asc",
@@ -668,13 +729,13 @@ export async function updateAllAdminChannels() {
   const failed: Array<{ channelId: string; title: string; message: string }> = [];
 
   for (const channel of channels) {
-    if (wasUpdatedToday(channel.updatedAt)) {
+    if (wasFullyUpdatedToday(channel)) {
       skipped += 1;
       continue;
     }
 
     if (attempted > 0) {
-      await delay(CHANNEL_ADMIN_UPDATE_BATCH_DELAY_MS);
+      await delay(getAdminBatchDelayMs());
     }
 
     attempted += 1;

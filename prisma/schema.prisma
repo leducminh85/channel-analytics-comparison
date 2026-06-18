@@ -97,21 +97,25 @@ model CompareGroupShare {
 }
 
 model Channel {
-  id              String         @id @default(cuid())
-  channel_id      String         @unique
-  channel_url     String
-  title           String
-  logo_url        String?
-  subscriberCount Int            @default(0)
-  videoCount      Int            @default(0)
-  viewCount       BigInt         @default(0)
-  uploadFrequency String?
-  views30Days     BigInt         @default(0)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  dailyStats      DailyStat[]
-  monthlyStats    MonthlyStat[]
-  groups          GroupChannel[]
+  id                  String         @id @default(cuid())
+  channel_id          String         @unique
+  channel_url         String
+  title               String
+  logo_url            String?
+  subscriberCount     Int            @default(0)
+  videoCount          Int            @default(0)
+  viewCount           BigInt         @default(0)
+  uploadFrequency     String?
+  views30Days         BigInt         @default(0)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  youtubeUpdatedAt    DateTime?
+  vidiqUpdatedAt      DateTime?
+  lastUpdateAttemptAt DateTime?
+  lastUpdateStatus    String?
+  dailyStats          DailyStat[]
+  monthlyStats        MonthlyStat[]
+  groups              GroupChannel[]
 
   @@map("channels")
 }

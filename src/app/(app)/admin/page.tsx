@@ -871,7 +871,7 @@ export default function AdminPage() {
           confirmState?.type === "delete-user"
             ? `Bạn có chắc chắn muốn xoá tài khoản "${confirmState.user.email || confirmState.user.name}"?`
             : confirmState?.type === "update-all-channels"
-              ? `Cập nhật toàn bộ ${channelTotal ?? "các"} kênh? Hệ thống sẽ bỏ qua kênh đã cập nhật hôm nay và giãn 10 phút giữa mỗi kênh cần cập nhật.`
+              ? `Cập nhật toàn bộ ${channelTotal ?? "các"} kênh? Hệ thống sẽ bỏ qua kênh đã cập nhật hôm nay và giãn 1 phút giữa mỗi kênh cần cập nhật.`
               : confirmState?.type === "delete-channel"
                 ? `Xóa kênh "${confirmState.channel.title}" khỏi hệ thống? Kênh này cũng sẽ bị gỡ khỏi mọi nhóm đang liên kết.`
                 : ""
