@@ -384,7 +384,7 @@ async function refreshChannelData(channel: {
       return {
         channel: serializeAdminChannel(updatedChannel),
         skipped: false,
-        warning: getErrorMessage(vidiqError, "VidIQ lỗi, đã giữ nguyên dữ liệu tăng trưởng cũ."),
+        warning: "Đã cập nhật dữ liệu YouTube. VidIQ chưa trả dữ liệu tăng trưởng, hệ thống giữ nguyên số liệu cũ.",
       };
     }
   }
