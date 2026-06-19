@@ -18,8 +18,27 @@ const ADMIN_CHANNELS_PAGE_SIZE = 25;
 type ChannelWriteClient = Pick<Prisma.TransactionClient, "channel" | "dailyStat" | "groupChannel" | "monthlyStat">;
 type ChannelUpdateStatus = "SUCCESS" | "YOUTUBE_FAILED" | "VIDIQ_FAILED";
 
+function isTechnicalErrorMessage(message: string) {
+  const patterns = [
+    "__TURBOPACK__",
+    "Invalid `",
+    "Unknown argument",
+    "PrismaClient",
+    "invocation in",
+    ".next\\",
+    ".next/",
+  ];
+
+  return message.length > 240 || patterns.some((pattern) => message.includes(pattern));
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+  if (!(error instanceof Error)) return fallback;
+
+  const message = error.message.trim();
+  if (!message || isTechnicalErrorMessage(message)) return fallback;
+
+  return message;
 }
 
 function delay(ms: number) {

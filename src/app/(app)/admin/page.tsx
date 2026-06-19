@@ -75,8 +75,27 @@ type ConfirmState =
 
 const CHANNEL_UPDATE_DATE_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
+function isTechnicalErrorMessage(message: string) {
+  const patterns = [
+    "__TURBOPACK__",
+    "Invalid `",
+    "Unknown argument",
+    "PrismaClient",
+    "invocation in",
+    ".next\\",
+    ".next/",
+  ];
+
+  return message.length > 240 || patterns.some((pattern) => message.includes(pattern));
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+  if (!(error instanceof Error)) return fallback;
+
+  const message = error.message.trim();
+  if (!message || isTechnicalErrorMessage(message)) return fallback;
+
+  return message;
 }
 
 function formatNumber(num: number) {
