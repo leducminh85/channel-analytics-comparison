@@ -240,7 +240,7 @@ async function fetchVidiqStatsWithToken(channelId: string, token: string, tokenL
     const viewsTodayRealtime = Math.max(0, currentTotalViews - yesterdayTotalViews);
     const past29DaysStats = dailyData.slice(1, 30);
     const viewsPast29Days = past29DaysStats.reduce(
-      (sum, day) => sum + (day.views_change || 0),
+      (sum, day) => sum + Math.max(0, day.views_change || 0),
       0
     );
     views30Days = viewsTodayRealtime + viewsPast29Days;
