@@ -106,7 +106,7 @@ export default function MonthlyViewsChart({
       const monthKey = stat.month;
       allMonthsSet.add(monthKey);
       if (!monthlyDataMap[monthKey]) monthlyDataMap[monthKey] = {};
-      monthlyDataMap[monthKey][channel.id] = stat.views_gained;
+      monthlyDataMap[monthKey][channel.id] = Math.max(0, stat.views_gained);
     });
   });
 

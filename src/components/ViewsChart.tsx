@@ -132,7 +132,7 @@ export default function ViewsChart({
     };
     channels.forEach((channel) => {
       const stat = channel.dailyStats.find((s) => s.date_str === date);
-      entry[channel.id] = stat?.views_change ?? 0;
+      entry[channel.id] = Math.max(0, stat?.views_change ?? 0);
     });
     return entry;
   });
