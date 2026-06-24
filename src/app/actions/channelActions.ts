@@ -1,7 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { getChannelIdFromUrl, getChannelStats, getUploadFrequency } from "@/lib/services/youtube";
+import { getChannelIdFromUrl, getChannelStats } from "@/lib/services/youtube";
 import { getVidiqStats } from "@/lib/services/vidiq";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
@@ -144,7 +144,6 @@ type ChannelForAdmin = {
   subscriberCount: number;
   videoCount: number;
   viewCount: bigint;
-  uploadFrequency: string | null;
   views30Days: bigint;
   createdAt: Date;
   updatedAt: Date;
@@ -182,7 +181,6 @@ function serializeAdminChannel(channel: ChannelForAdmin) {
     subscriberCount: channel.subscriberCount,
     videoCount: channel.videoCount,
     viewCount: Number(channel.viewCount),
-    uploadFrequency: channel.uploadFrequency,
     views30Days: Number(channel.views30Days),
     groupsCount: channel._count?.groups ?? 0,
     createdAt: channel.createdAt.toISOString(),
@@ -356,13 +354,9 @@ async function refreshChannelData(channel: {
 }) {
   const attemptedAt = new Date();
   let youtubeStats: Awaited<ReturnType<typeof getChannelStats>>;
-  let uploadFreq: Awaited<ReturnType<typeof getUploadFrequency>>;
 
   try {
-    [youtubeStats, uploadFreq] = await Promise.all([
-      getChannelStats(channel.channel_id),
-      getUploadFrequency(channel.channel_id),
-    ]);
+    youtubeStats = await getChannelStats(channel.channel_id);
   } catch (youtubeError) {
     await recordChannelUpdateFailure(channel.id, attemptedAt, "YOUTUBE_FAILED");
     throw youtubeError;
@@ -385,7 +379,6 @@ async function refreshChannelData(channel: {
           subscriberCount: youtubeStats.subscriberCount,
           videoCount: youtubeStats.videoCount,
           viewCount: youtubeStats.viewCount,
-          uploadFrequency: uploadFreq,
           youtubeUpdatedAt: attemptedAt,
           lastUpdateAttemptAt: attemptedAt,
           lastUpdateStatus: "VIDIQ_FAILED",
@@ -418,7 +411,6 @@ async function refreshChannelData(channel: {
         subscriberCount: youtubeStats.subscriberCount,
         videoCount: youtubeStats.videoCount,
         viewCount: youtubeStats.viewCount,
-        uploadFrequency: uploadFreq,
         views30Days: vidiqData?.views30Days ?? channel.views30Days,
         youtubeUpdatedAt: attemptedAt,
         vidiqUpdatedAt: vidiqData ? attemptedAt : channel.vidiqUpdatedAt,
@@ -548,10 +540,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
       youtubeChannelId,
     });
 
-    const [youtubeStats, uploadFreq] = await Promise.all([
-      getChannelStats(youtubeChannelId),
-      getUploadFrequency(youtubeChannelId),
-    ]);
+    const youtubeStats = await getChannelStats(youtubeChannelId);
 
     logChannelImport("info", "add:youtube-data-fetched", {
       url,
@@ -562,7 +551,6 @@ export async function addChannelToGroup(url: string, groupId: string) {
       subscriberCount: youtubeStats.subscriberCount,
       videoCount: youtubeStats.videoCount,
       viewCount: youtubeStats.viewCount,
-      uploadFrequency: uploadFreq,
     });
 
     let vidiqData: Awaited<ReturnType<typeof getVidiqStats>> | null = null;
@@ -606,7 +594,6 @@ export async function addChannelToGroup(url: string, groupId: string) {
           subscriberCount: youtubeStats.subscriberCount,
           videoCount: youtubeStats.videoCount,
           viewCount: youtubeStats.viewCount,
-          uploadFrequency: uploadFreq,
           views30Days: vidiqData?.views30Days ?? 0,
           youtubeUpdatedAt: attemptedAt,
           vidiqUpdatedAt: vidiqData ? attemptedAt : undefined,

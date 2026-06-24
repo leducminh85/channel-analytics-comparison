@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Clock,
   Database,
   ExternalLink,
   Eye,
@@ -50,7 +49,6 @@ interface AdminChannel {
   subscriberCount: number;
   videoCount: number;
   viewCount: number;
-  uploadFrequency: string | null;
   views30Days: number;
   groupsCount: number;
   createdAt: string;
@@ -590,7 +588,6 @@ export default function AdminPage() {
                 <th className="px-5 py-4 text-right">Số Video</th>
                 <th className="px-5 py-4 text-right">Subscriber</th>
                 <th className="px-5 py-4 text-right">Views (30 ngày)</th>
-                <th className="px-5 py-4">Chu kỳ đăng</th>
                 <th className="px-5 py-4">Cập nhật gần nhất</th>
                 <th className="px-5 py-4 text-right">Thao tác</th>
               </tr>
@@ -613,9 +610,6 @@ export default function AdminPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="ml-auto h-6 w-20 rounded bg-slate-100" />
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="h-6 w-28 rounded bg-slate-100" />
                       </td>
                       <td className="px-5 py-4">
                         <div className="h-6 w-28 rounded bg-slate-100" />
@@ -688,12 +682,6 @@ export default function AdminPage() {
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                             <TrendingUp className="h-3 w-3" />
                             {formatNumber(channel.views30Days)}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Clock className="h-3.5 w-3.5 text-slate-400" />
-                            {channel.uploadFrequency || "N/A"}
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">

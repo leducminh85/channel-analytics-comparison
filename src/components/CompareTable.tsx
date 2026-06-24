@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ChevronDown, ChevronUp, Eye, Video, Users, TrendingUp, Clock, ExternalLink, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, Video, Users, TrendingUp, ExternalLink, Trash2 } from "lucide-react";
 import { removeChannelFromGroup } from "@/app/actions/channelActions";
 import { useState, useTransition } from "react";
 import ActionMenu from "./ActionMenu";
@@ -16,7 +16,6 @@ interface Channel {
   subscriberCount: number;
   videoCount: number;
   viewCount: number;
-  uploadFrequency: string | null;
   views30Days: number;
   dailyStats?: { date_str: string }[];
   monthlyStats?: { month: string }[];
@@ -87,7 +86,15 @@ export default function CompareTable({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="overflow-x-auto overflow-y-visible pb-32 -mb-32">
-        <table className="compare-table w-full text-sm">
+        <table className="compare-table w-full table-fixed text-sm">
+          <colgroup>
+            <col className={canEdit ? "w-[30%]" : "w-[32%]"} />
+            <col className={canEdit ? "w-[16%]" : "w-[17%]"} />
+            <col className={canEdit ? "w-[16%]" : "w-[17%]"} />
+            <col className={canEdit ? "w-[16%]" : "w-[17%]"} />
+            <col className={canEdit ? "w-[16%]" : "w-[17%]"} />
+            {canEdit && <col className="w-[6%]" />}
+          </colgroup>
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/80">
               <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -111,11 +118,6 @@ export default function CompareTable({
               <th className="whitespace-nowrap px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center justify-end gap-1.5">
                   <TrendingUp className="h-3.5 w-3.5" /> {"Views (30 ng\u00e0y)"}
-                </div>
-              </th>
-              <th className="whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" /> {"Chu k\u1ef3 \u0111\u0103ng"}
                 </div>
               </th>
               {canEdit && (
@@ -183,10 +185,6 @@ export default function CompareTable({
                     <TrendingUp className="h-3 w-3" />
                     {formatNumber(channel.views30Days)}
                   </span>
-                </td>
-
-                <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-                  {channel.uploadFrequency || "N/A"}
                 </td>
 
                 {canEdit && (
