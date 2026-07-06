@@ -11,6 +11,7 @@ const VIDIQ_MAX_TOKEN_ATTEMPTS = 2;
 const VIDIQ_RATE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;
 const VIDIQ_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
 const VIDIQ_FAILURES_BEFORE_COOLDOWN = 3;
+const VIDIQ_STATS_LOOKBACK_DAYS = 365;
 
 interface VidiqToken {
   value: string;
@@ -37,20 +38,36 @@ class VidiqHttpError extends Error {
 
 const vidiqTokenStates = new Map<string, VidiqTokenState>();
 
+interface VidiqStatsResponseItem {
+  id: string;
+  title?: string;
+  thumbnails?: string;
+  stats?: VidiqStatsSnapshot[];
+}
+
+interface VidiqStatsSnapshot {
+  recorded_at: string;
+  subscribers: number;
+  views: number;
+  videos: number;
+}
+
+interface NormalizedVidiqStat {
+  recordedAt: Date;
+  timestampSeconds: number;
+  day: string;
+  month: string;
+  views: number;
+  subscribers: number;
+  videos: number;
+}
+
 interface VidiqDailyStat {
-  date: number | string;
+  date_str: string;
   views: number;
   views_change: number;
   subscribers: number;
   subscribers_change: number;
-}
-
-interface VidiqMonthlyRawStat {
-  date?: number | string | null;
-  views?: number;
-  views_change?: number;
-  subscribers?: number;
-  subscribers_change?: number;
 }
 
 interface VidiqMonthlyStat {
@@ -129,93 +146,173 @@ function markTokenFailure(tokenLabel: string, error: unknown) {
   }
 }
 
-/**
- * Derive monthly aggregates from raw VidIQ data using the existing Python-compatible logic.
- */
-export function calculateMonthlyStats(monthlyRaw: VidiqMonthlyRawStat[], currentTotalViews: number, currentSubsCount: number) {
-  if (!monthlyRaw || monthlyRaw.length === 0) return [];
+function getVidiqClientHeader() {
+  const clientId = VIDIQ_CLIENT_ID?.trim();
 
-  const monthlyStats: VidiqMonthlyStat[] = [];
-
-  monthlyRaw.forEach((stat) => {
-    const ts = stat.date;
-    if (ts) {
-      const timestamp = Number(ts);
-      if (Number.isNaN(timestamp)) {
-        return;
-      }
-
-      const dt = new Date(timestamp * 1000);
-
-      // Shift the month backward by two months to mirror the legacy Python logic.
-      let newMonth = (dt.getUTCMonth() + 1) - 2;
-      let newYear = dt.getUTCFullYear();
-
-      if (newMonth <= 0) {
-        newMonth += 12;
-        newYear -= 1;
-      }
-
-      const monthStr = `${newYear}-${newMonth.toString().padStart(2, "0")}`;
-
-      monthlyStats.push({
-        month: monthStr,
-        views_gained: stat.views_change || 0,
-        total_views_at_end: stat.views || 0,
-        subscribers: stat.subscribers || 0,
-        subscribers_change: stat.subscribers_change || 0
-      });
-    }
-  });
-
-  // Keep the most recent month at the front of the array.
-  monthlyStats.sort((a, b) => b.month.localeCompare(a.month));
-
-  // Add the current month when the API payload stops at the previous month.
-  if (monthlyStats.length > 0) {
-    const latestItem = monthlyStats[0];
-    const latestMonthStr = latestItem.month;
-    const latestTotalViews = latestItem.total_views_at_end;
-
-    const [y, m] = latestMonthStr.split("-").map(Number);
-    let nextM = m + 1;
-    let nextY = y;
-
-    if (nextM > 12) {
-      nextM = 1;
-      nextY += 1;
-    }
-
-    const nextMonthStr = `${nextY}-${nextM.toString().padStart(2, "0")}`;
-
-    if (nextMonthStr !== latestMonthStr) {
-      const nextViewsGained = Math.max(0, currentTotalViews - latestTotalViews);
-
-      // Insert the inferred current month at the beginning of the list.
-      monthlyStats.unshift({
-        month: nextMonthStr,
-        views_gained: nextViewsGained,
-        total_views_at_end: currentTotalViews,
-        subscribers: currentSubsCount,
-        subscribers_change: 0
-      });
-    }
+  if (!clientId || clientId === "YOUR_VIDIQ_CLIENT_ID") {
+    return "ext vch/3.200.0";
   }
 
-  // Ensure the final result remains sorted newest-first.
+  return clientId;
+}
+
+function formatDateQuery(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getStatsDateRange(now = new Date()) {
+  const to = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const from = new Date(to);
+  from.setDate(from.getDate() - (VIDIQ_STATS_LOOKBACK_DAYS - 1));
+
+  return {
+    from: formatDateQuery(from),
+    to: formatDateQuery(to),
+  };
+}
+
+function toUtcDay(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function toUtcMonth(date: Date) {
+  return date.toISOString().slice(0, 7);
+}
+
+function normalizeSnapshot(snapshot: VidiqStatsSnapshot): NormalizedVidiqStat | null {
+  const recordedAt = new Date(snapshot.recorded_at);
+  const views = Number(snapshot.views);
+  const subscribers = Number(snapshot.subscribers);
+  const videos = Number(snapshot.videos);
+
+  if (
+    Number.isNaN(recordedAt.getTime()) ||
+    !Number.isFinite(views) ||
+    !Number.isFinite(subscribers) ||
+    !Number.isFinite(videos)
+  ) {
+    return null;
+  }
+
+  return {
+    recordedAt,
+    timestampSeconds: Math.floor(recordedAt.getTime() / 1000),
+    day: toUtcDay(recordedAt),
+    month: toUtcMonth(recordedAt),
+    views,
+    subscribers,
+    videos,
+  };
+}
+
+function getDailySnapshots(stats: VidiqStatsSnapshot[]) {
+  const snapshots = stats
+    .map(normalizeSnapshot)
+    .filter((item): item is NormalizedVidiqStat => Boolean(item))
+    .sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
+
+  const latestByDay = new Map<string, NormalizedVidiqStat>();
+  for (const snapshot of snapshots) {
+    latestByDay.set(snapshot.day, snapshot);
+  }
+
+  return Array.from(latestByDay.values()).sort(
+    (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime()
+  );
+}
+
+function calculateDailyStats(dailySnapshots: NormalizedVidiqStat[]) {
+  const dailyStats = dailySnapshots.map<VidiqDailyStat>((snapshot, index) => {
+    const previous = dailySnapshots[index - 1];
+
+    return {
+      date_str: String(snapshot.timestampSeconds),
+      views: snapshot.views,
+      views_change: previous ? Math.max(0, snapshot.views - previous.views) : 0,
+      subscribers: snapshot.subscribers,
+      subscribers_change: previous ? Math.max(0, snapshot.subscribers - previous.subscribers) : 0,
+    };
+  });
+
+  return dailyStats.sort((a, b) => Number(b.date_str) - Number(a.date_str));
+}
+
+function calculateViews30Days(dailyStats: VidiqDailyStat[]) {
+  return dailyStats
+    .slice(0, 30)
+    .reduce((sum, stat) => sum + Math.max(0, stat.views_change), 0);
+}
+
+export function calculateMonthlyStats(dailySnapshots: NormalizedVidiqStat[]) {
+  if (dailySnapshots.length === 0) return [];
+
+  const monthlyStats: VidiqMonthlyStat[] = [];
+  const monthMap = new Map<string, NormalizedVidiqStat[]>();
+
+  for (const snapshot of dailySnapshots) {
+    const monthStats = monthMap.get(snapshot.month) ?? [];
+    monthStats.push(snapshot);
+    monthMap.set(snapshot.month, monthStats);
+  }
+
+  const monthKeys = Array.from(monthMap.keys()).sort((a, b) => a.localeCompare(b));
+  let previousMonthEnd: NormalizedVidiqStat | null = null;
+
+  for (const month of monthKeys) {
+    const snapshots = monthMap.get(month);
+    if (!snapshots || snapshots.length === 0) continue;
+
+    const firstSnapshot = snapshots[0];
+    const lastSnapshot = snapshots[snapshots.length - 1];
+    const baseline = previousMonthEnd ?? firstSnapshot;
+
+    monthlyStats.push({
+      month,
+      views_gained: Math.max(0, lastSnapshot.views - baseline.views),
+      total_views_at_end: lastSnapshot.views,
+      subscribers: lastSnapshot.subscribers,
+      subscribers_change: Math.max(0, lastSnapshot.subscribers - baseline.subscribers),
+    });
+
+    previousMonthEnd = lastSnapshot;
+  }
+
   return monthlyStats.sort((a, b) => b.month.localeCompare(a.month));
 }
 
+function getChannelStatsItem(data: unknown, channelId: string): VidiqStatsResponseItem {
+  if (!Array.isArray(data)) {
+    throw new Error("VidIQ API Error: response is not an array");
+  }
+
+  const item = data.find(
+    (entry): entry is VidiqStatsResponseItem =>
+      Boolean(entry && typeof entry === "object" && "id" in entry && entry.id === channelId)
+  ) ?? data[0];
+
+  if (!item || typeof item !== "object" || !("stats" in item) || !Array.isArray(item.stats)) {
+    throw new Error("VidIQ API Error: response missing stats data");
+  }
+
+  return item as VidiqStatsResponseItem;
+}
+
 async function fetchVidiqStatsWithToken(channelId: string, token: string, tokenLabel: string) {
-  const url = `https://api.vidiq.com/youtube/channels/public/channel-pages/${channelId}`;
+  const { from, to } = getStatsDateRange();
+  const url = new URL("https://api.vidiq.com/youtube/channels/public/stats");
+  url.searchParams.set("ids", channelId);
+  url.searchParams.set("from", from);
+  url.searchParams.set("to", to);
 
   const response = await fetch(url, {
+    cache: "no-store",
     headers: {
       "accept": "*/*",
       "authorization": `Bearer ${token}`,
-      "content-type": "application/json",
-      "user-agent": "Mozilla/5.0",
-      "x-vidiq-client": VIDIQ_CLIENT_ID || "ext vch/3.168.0",
+      "x-vidiq-client": getVidiqClientHeader(),
     },
   });
 
@@ -224,39 +321,23 @@ async function fetchVidiqStatsWithToken(channelId: string, token: string, tokenL
   }
 
   const data = await response.json();
-  const dailyData: VidiqDailyStat[] = Array.isArray(data.daily_stats) ? data.daily_stats : [];
-  const monthlyRaw = Array.isArray(data.monthly_stats) ? data.monthly_stats : [];
+  const channelData = getChannelStatsItem(data, channelId);
+  const rawStats = channelData.stats ?? [];
 
-  if (dailyData.length === 0 && monthlyRaw.length === 0) {
+  if (rawStats.length === 0) {
     throw new Error(`VidIQ API Error (${tokenLabel}): response missing stats data`);
   }
 
-  const currentTotalViews = data.current_stats?.views?.count || 0;
-  const currentSubsCount = data.current_stats?.subscribers?.count || 0;
+  const dailySnapshots = getDailySnapshots(rawStats);
+  const dailyStats = calculateDailyStats(dailySnapshots);
+  const monthlyStats = calculateMonthlyStats(dailySnapshots);
+  const views30Days = calculateViews30Days(dailyStats);
 
-  let views30Days = 0;
-  if (dailyData.length >= 2) {
-    const yesterdayTotalViews = dailyData[1]?.views || 0;
-    const viewsTodayRealtime = Math.max(0, currentTotalViews - yesterdayTotalViews);
-    const past29DaysStats = dailyData.slice(1, 30);
-    const viewsPast29Days = past29DaysStats.reduce(
-      (sum, day) => sum + Math.max(0, day.views_change || 0),
-      0
-    );
-    views30Days = viewsTodayRealtime + viewsPast29Days;
+  if (dailyStats.length === 0 && monthlyStats.length === 0) {
+    throw new Error(`VidIQ API Error (${tokenLabel}): response missing usable stats data`);
   }
 
-  const dailyStats = dailyData.map((item) => ({
-    date_str: String(item.date),
-    views: item.views,
-    views_change: item.views_change,
-    subscribers: item.subscribers,
-    subscribers_change: item.subscribers_change,
-  }));
-
-  const monthlyStats = calculateMonthlyStats(monthlyRaw, currentTotalViews, currentSubsCount);
-
-  console.log(`[VidIQ] Fetched ${dailyStats.length} daily stats and ${monthlyRaw.length} monthly stats for channel ${channelId} using ${tokenLabel}`);
+  console.log(`[VidIQ] Fetched ${rawStats.length} snapshots, ${dailyStats.length} daily stats and ${monthlyStats.length} monthly stats for channel ${channelId} using ${tokenLabel} (${from} to ${to})`);
 
   return {
     views30Days: Math.round(views30Days),

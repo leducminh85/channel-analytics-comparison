@@ -1,27 +1,34 @@
-import * as dotenv from 'dotenv';
+/* eslint-disable @typescript-eslint/no-require-imports */
+const dotenv = require("dotenv");
 dotenv.config();
 
-// Load the service only after dotenv has initialized the environment.
-const { getVidiqStats } = require('./src/lib/services/vidiq');
+const { getVidiqStats } = require("./src/lib/services/vidiq");
 
 async function test() {
   try {
-    const channelId = "UCX6OQ3DkcsbYNE6H8uQQuVA"; // MrBeast
-    console.log(`[TEST] Äang láº¥y dá»¯ liá»‡u cho kÃªnh: ${channelId}...`);
+    const channelId = "UC8EB7c0E_TS4tpTQwMtv6fw";
+    console.log(`[TEST] Fetching VidIQ stats for channel: ${channelId}...`);
 
     const data = await getVidiqStats(channelId);
 
-    console.log(`=> Tá»•ng sá»‘ ngÃ y tráº£ vá» (daily_stats): ${data.dailyStats.length}`);
-    console.log(`=> Tá»•ng sá»‘ thÃ¡ng tÃ­nh toÃ¡n Ä‘Æ°á»£c (monthly_stats): ${data.monthlyStats.length}`);
+    console.log(`=> views30Days: ${data.views30Days}`);
+    console.log(`=> dailyStats count: ${data.dailyStats.length}`);
+    console.log(`=> monthlyStats count: ${data.monthlyStats.length}`);
 
     if (data.dailyStats.length > 0) {
       const oldestDate = new Date(Number(data.dailyStats[data.dailyStats.length - 1].date_str) * 1000);
       const newestDate = new Date(Number(data.dailyStats[0].date_str) * 1000);
-      console.log(`=> NgÃ y cÅ© nháº¥t cÃ³ data: ${oldestDate.toLocaleDateString('vi-VN')}`);
-      console.log(`=> NgÃ y má»›i nháº¥t cÃ³ data: ${newestDate.toLocaleDateString('vi-VN')}`);
+      console.log(`=> oldest daily stat: ${oldestDate.toISOString().slice(0, 10)}`);
+      console.log(`=> newest daily stat: ${newestDate.toISOString().slice(0, 10)}`);
+      console.log(`=> newest daily views_change: ${data.dailyStats[0].views_change}`);
+    }
+
+    if (data.monthlyStats.length > 0) {
+      console.log(`=> newest month: ${data.monthlyStats[0].month}`);
+      console.log(`=> newest month views_gained: ${data.monthlyStats[0].views_gained}`);
     }
   } catch (err) {
-    console.error("Lá»—i:", err);
+    console.error("Error:", err);
   }
 }
 
