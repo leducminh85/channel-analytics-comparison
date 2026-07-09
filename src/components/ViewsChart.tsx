@@ -59,10 +59,26 @@ function formatDate(dateStr: string): string {
       const date = new Date(timestamp * 1000);
       return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
     }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+    }
+
     return dateStr;
   } catch {
     return dateStr;
   }
+}
+
+function getDateKey(dateStr: string): string {
+  const timestamp = Number(dateStr);
+  if (!isNaN(timestamp)) {
+    return new Date(timestamp * 1000).toISOString().slice(0, 10);
+  }
+
+  return dateStr;
 }
 
 function CustomTooltip({
@@ -120,7 +136,7 @@ export default function ViewsChart({
 
   const allDates = new Set<string>();
   channels.forEach((channel) => {
-    channel.dailyStats.forEach((stat) => allDates.add(stat.date_str));
+    channel.dailyStats.forEach((stat) => allDates.add(getDateKey(stat.date_str)));
   });
   const sortedDates = Array.from(allDates).sort();
   const recentDates = sortedDates.slice(-30);
@@ -131,7 +147,7 @@ export default function ViewsChart({
       formattedDate: formatDate(date)
     };
     channels.forEach((channel) => {
-      const stat = channel.dailyStats.find((s) => s.date_str === date);
+      const stat = channel.dailyStats.find((s) => getDateKey(s.date_str) === date);
       entry[channel.id] = Math.max(0, stat?.views_change ?? 0);
     });
     return entry;
