@@ -8,6 +8,7 @@ import {
 } from "@/app/actions/monthlyComparisonSettingsActions";
 import AddChannelForm from "@/components/AddChannelForm";
 import CompareTable from "@/components/CompareTable";
+import ChannelVideoLibrary from "@/components/ChannelVideoLibrary";
 import ViewsChart from "@/components/ViewsChart";
 import MonthlyComparisonTable from "@/components/MonthlyComparisonTable";
 import MonthlyViewsChart from "@/components/MonthlyViewsChart";
@@ -123,6 +124,7 @@ export default async function GroupDetailPage({
 
       {group.canEdit && <AddChannelForm groupId={id} />}
       <CompareTable channels={channels} groupId={id} canEdit={group.canEdit} />
+      <ChannelVideoLibrary channels={channels} groupId={id} canEdit={group.canEdit} />
       <ViewsChart channels={channels} />
 
       {channels.some((channel) => channel.monthlyStats.length > 0) && (

@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import ConfirmModal from "@/components/ConfirmModal";
+import ChannelVideoLibrary from "@/components/ChannelVideoLibrary";
 
 interface AdminUser {
   id: string;
@@ -110,6 +111,10 @@ function formatDate(value: string | Date) {
 }
 
 export default function AdminPage() {
+  const [videoChannel, setVideoChannel] = useState<AdminChannel | null>(null);
+  useEffect(() => {
+    if (videoChannel) document.getElementById("video-library")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [videoChannel]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [channels, setChannels] = useState<AdminChannel[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -693,6 +698,12 @@ export default function AdminPage() {
                         <td className="whitespace-nowrap px-5 py-4 text-right">
                           <div className="flex justify-end gap-2">
                             <button
+                              onClick={() => setVideoChannel(channel)}
+                              className="rounded-lg p-2 text-slate-400 transition-all hover:bg-indigo-50 hover:text-indigo-600"
+                              title="Xem thư viện video"
+                              aria-label={`Xem video của ${channel.title}`}
+                            ><Video size={18} /></button>
+                            <button
                               onClick={() => handleUpdateChannel(channel)}
                               disabled={isUpdating || updatingAllChannels}
                               className="rounded-lg p-2 text-slate-400 transition-all hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -738,6 +749,11 @@ export default function AdminPage() {
           </>
         )}
       </section>
+
+      {videoChannel && <div className="space-y-2">
+        <div className="flex justify-end"><button onClick={() => setVideoChannel(null)} className="text-sm text-slate-500 hover:text-indigo-600">Đóng thư viện video</button></div>
+        <ChannelVideoLibrary key={videoChannel.id} channels={[videoChannel]} canEdit />
+      </div>}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">

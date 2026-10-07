@@ -36,8 +36,30 @@ This project is built for teams that need to:
 - Manage internal users through an admin interface.
 - Run the stack locally or through Docker for development and demos.
 
+## Video library setup
+
+Run `npx prisma migrate deploy` and `npx prisma generate`, then restart the dev server.
+Metadata uses the existing `YOUTUBE_API_KEY`; no Python worker is required.
+
+Open a comparison group → **Thư viện video**, select a channel, then **Đồng bộ toàn bộ video** for existing channels.
+Admins can also open the library using the video icon in the channel management table.
+Viewer access is read-only; owners/editors can sync videos.
+
+Videos are upserted by YouTube ID in batches of up to 50, linked by channel foreign key.
+Date/time displays use GMT+7.
+Only public videos returned by YouTube are importable; this downloads metadata, not MP4 files.
+Previously saved videos remain when YouTube no longer returns them; counts can therefore differ from the current public channel count.
+
+Background sync uses Next.js `after` on the persistent Node server. A database lease prevents duplicate syncs;
+after a process restart or timeout, wait two minutes and retry. Saved pages survive; metadata rescans from page one.
+This is not an independent durable queue: on serverless hosts, execution duration limits still apply.
+
+Run the pagination/metadata regression checks with `node --test tests/youtube-videos.test.mjs` (Node 22.18+).
+
 ## Key Features
 
+- Channel video library with server-side search, date/view sorting, pagination and descriptions.
+- Adding or refreshing a channel also starts its full public uploads sync (including short videos).
 - Credentials-based authentication with `NextAuth`
 - Automatic redirect from `/` to `/login` or `/dashboard` depending on session state
 - Create, rename, update, and delete comparison groups

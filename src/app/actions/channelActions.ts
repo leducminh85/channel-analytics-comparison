@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { getSessionUserId, requireGroupAccess } from "@/lib/groupAccess";
 import type { Prisma } from "@prisma/client";
+import { scheduleVideoSync } from "@/lib/services/videoSync";
 
 const CHANNEL_IMPORT_BATCH_DELAY_MS = 3000;
 const CHANNEL_ADMIN_UPDATE_BATCH_DELAY_MS = 60 * 1000;
@@ -362,6 +363,8 @@ async function refreshChannelData(channel: {
     throw youtubeError;
   }
 
+  await scheduleVideoSync(channel.id);
+
   let vidiqData: Awaited<ReturnType<typeof getVidiqStats>> | null = null;
   const shouldFetchVidiq = !channel.vidiqUpdatedAt || !wasUpdatedToday(channel.vidiqUpdatedAt);
 
@@ -469,6 +472,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
       });
 
       await linkChannelToGroup(existingChannel.id, groupId);
+      await scheduleVideoSync(existingChannel.id);
 
       revalidatePath("/dashboard");
       revalidatePath(`/group/${groupId}`);
@@ -517,6 +521,7 @@ export async function addChannelToGroup(url: string, groupId: string) {
       });
 
       await linkChannelToGroup(existingByYoutubeId.id, groupId);
+      await scheduleVideoSync(existingByYoutubeId.id);
 
       revalidatePath("/dashboard");
       revalidatePath(`/group/${groupId}`);
@@ -633,6 +638,8 @@ export async function addChannelToGroup(url: string, groupId: string) {
       });
     }
 
+    await scheduleVideoSync(channel.id);
+
     // 6. Revalidate cached UI routes that depend on this group.
     revalidatePath("/dashboard");
     revalidatePath(`/group/${groupId}`);
@@ -733,6 +740,7 @@ export async function updateAdminChannel(channelId: string) {
   }
 
   if (wasFullyUpdatedToday(channel)) {
+    await scheduleVideoSync(channel.id);
     return {
       channel: serializeAdminChannel(channel),
       skipped: true,
@@ -769,6 +777,7 @@ export async function updateAllAdminChannels() {
 
   for (const channel of channels) {
     if (wasFullyUpdatedToday(channel)) {
+      await scheduleVideoSync(channel.id);
       skipped += 1;
       continue;
     }

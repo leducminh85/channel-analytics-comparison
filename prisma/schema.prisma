@@ -116,8 +116,47 @@ model Channel {
   dailyStats          DailyStat[]
   monthlyStats        MonthlyStat[]
   groups              GroupChannel[]
+  videos              ChannelVideo[]
+  videoSync           ChannelVideoSync?
 
   @@map("channels")
+}
+
+model ChannelVideo {
+  id               String   @id // YouTube video ID
+  channelId        String
+  title            String
+  thumbnail        String?
+  description      String   @default("")
+  durationSeconds  Int?
+  viewCount        BigInt   @default(0)
+  publishedAt      DateTime?
+  hasCaption       Boolean  @default(false)
+  caption          String?
+  captionLanguage  String?
+  captionStatus    String   @default("PENDING")
+  captionError     String?
+  captionCheckedAt DateTime?
+  syncedAt         DateTime @default(now())
+  channel          Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, publishedAt, id])
+  @@index([channelId, viewCount, id])
+  @@map("channel_videos")
+}
+
+model ChannelVideoSync {
+  channelId   String   @id
+  status      String   @default("IDLE")
+  runId       String?
+  heartbeatAt DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  processed   Int      @default(0)
+  error       String?
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("channel_video_syncs")
 }
 
 model GroupChannel {

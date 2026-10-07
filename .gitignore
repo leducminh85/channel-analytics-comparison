@@ -46,3 +46,5 @@ next-env.d.ts
 /postgres-data/
 /prisma/*.db
 /prisma/*.db-journal
+/.venv/
+__pycache__/
