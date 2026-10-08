@@ -18,16 +18,30 @@ async function authorize(channelId: string, groupId?: string, write = false) {
   if (!link) throw new Error("Kênh không thuộc nhóm này.");
 }
 
-export async function listChannelVideos(input: { channelId: string; groupId?: string; page?: number; search?: string; sort?: string }) {
-  await authorize(input.channelId, input.groupId);
+export async function listChannelVideos(input: { channelId?: string; groupId?: string; page?: number; search?: string; sort?: string }) {
+  let scope: Prisma.ChannelVideoWhereInput;
+  if (input.channelId) {
+    await authorize(input.channelId, input.groupId);
+    scope = { channelId: input.channelId };
+  } else {
+    const session = await getServerSession(authOptions);
+    const userId = getSessionUserId(session);
+    if (!userId || !input.groupId) throw new Error("Không có quyền truy cập nhóm.");
+    await requireGroupAccess(input.groupId, userId, ["OWNER", "EDITOR", "VIEWER"]);
+    scope = { channel: { groups: { some: { groupId: input.groupId } } } };
+  }
   const where: Prisma.ChannelVideoWhereInput = {
-    channelId: input.channelId,
+    ...scope,
     ...(input.search?.trim() ? { title: { contains: input.search.trim().slice(0, 200), mode: "insensitive" } } : {}),
   };
-  const [total, saved, sync] = await Promise.all([
+  const [total, saved, sync, activeGroupSyncs] = await Promise.all([
     prisma.channelVideo.count({ where }),
-    prisma.channelVideo.count({ where: { channelId: input.channelId } }),
-    prisma.channelVideoSync.findUnique({ where: { channelId: input.channelId } }),
+    prisma.channelVideo.count({ where: scope }),
+    input.channelId ? prisma.channelVideoSync.findUnique({ where: { channelId: input.channelId } }) : Promise.resolve(null),
+    input.channelId ? Promise.resolve(0) : prisma.channelVideoSync.count({ where: {
+      channel: { groups: { some: { groupId: input.groupId } } },
+      status: { in: ACTIVE_SYNC_STATUSES }, heartbeatAt: { gte: new Date(Date.now() - SYNC_LEASE_MS) },
+    } }),
   ]);
   const pageSize = 12;
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -37,12 +51,13 @@ export async function listChannelVideos(input: { channelId: string; groupId?: st
     : [{ publishedAt: { sort: input.sort === "oldest" ? "asc" : "desc", nulls: "last" } }, { id: "desc" }];
   const videos = await prisma.channelVideo.findMany({
     where, orderBy, skip: (page - 1) * pageSize, take: pageSize,
-    select: { id: true, title: true, thumbnail: true, durationSeconds: true, viewCount: true, publishedAt: true },
+    select: { id: true, channelId: true, channel: { select: { id: true, title: true, logo_url: true } }, title: true, thumbnail: true, durationSeconds: true, viewCount: true, publishedAt: true },
   });
   const stale = Boolean(sync && ACTIVE_SYNC_STATUSES.includes(sync.status) && sync.heartbeatAt.getTime() < Date.now() - SYNC_LEASE_MS);
   return {
     videos: videos.map(video => ({ ...video, viewCount: video.viewCount.toString(), publishedAt: video.publishedAt?.toISOString() || null })),
     total, saved, page, pages,
+    isSyncing: activeGroupSyncs > 0 || Boolean(sync && ACTIVE_SYNC_STATUSES.includes(sync.status) && !stale),
     sync: sync ? {
       status: stale ? "INTERRUPTED" : sync.status, processed: sync.processed,
       error: stale ? "Đồng bộ bị gián đoạn. Bấm đồng bộ để tiếp tục lấy dữ liệu." : sync.error,
