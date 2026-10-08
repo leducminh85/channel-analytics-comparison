@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { getVideoDetails, listChannelVideos, startVideoSync } from "@/app/actions/videoActions";
 
 type LibraryData = Awaited<ReturnType<typeof listChannelVideos>>;
@@ -85,24 +85,16 @@ function VideoDetail({ video, channelId, groupId, onClose }: {
   );
 }
 
-function VideoBrowser({ channel, groupId, canEdit, sort, column = false }: { channel?: LibraryChannel; groupId?: string; canEdit: boolean; sort: string; column?: boolean }) {
+function VideoBrowser({ channel, groupId, canEdit, sort, query, column = false }: { channel?: LibraryChannel; groupId?: string; canEdit: boolean; sort: string; query: string; column?: boolean }) {
   const channelId = channel?.id;
   const [data, setData] = useState<LibraryData | null>(null);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<Video | null>(null);
   const running = data?.isSyncing;
-
-  useEffect(() => {
-    if (search === query) return;
-    const timer = setTimeout(() => { setQuery(search); setPage(1); }, 300);
-    return () => clearTimeout(timer);
-  }, [search, query]);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,30 +124,19 @@ function VideoBrowser({ channel, groupId, canEdit, sort, column = false }: { cha
   }
 
   return <>
-    <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-5 py-4">
-      <div className="relative min-w-48 flex-1">
-        <Search size={16} className="absolute left-3 top-3 text-slate-400" />
-        <input value={search} onChange={event => setSearch(event.target.value)} aria-label="Tìm tiêu đề video" placeholder="Tìm tiêu đề video..." className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-indigo-400" />
-      </div>
-      {canEdit && channelId && <button onClick={sync} disabled={starting || running} className={`${buttonClass} !border-indigo-200 !bg-indigo-50 !text-indigo-600`}>
-        <RefreshCw size={15} className={starting || running ? "animate-spin" : ""} /> {running ? "Đang đồng bộ" : "Đồng bộ toàn bộ video"}
-      </button>}
-    </div>
+    {canEdit && channelId && <div className="flex justify-end px-3 pb-3">
+      <button onClick={sync} disabled={starting || running} title="Đồng bộ video" aria-label="Đồng bộ video" className={`${buttonClass} !h-9 !w-9 !p-0 !border-indigo-200 !bg-indigo-50 !text-indigo-600`}>
+        <RefreshCw size={16} className={starting || running ? "animate-spin" : ""} />
+      </button>
+    </div>}
     {error && <div role="alert" className="mx-5 mb-4 flex items-center justify-between rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}<button onClick={() => setRevision(value => value + 1)} className="ml-3 underline">Tải lại</button></div>}
-    <div aria-live="polite" className="mx-5 mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-      <span className="font-semibold text-slate-700">{data?.saved.toLocaleString("vi-VN") || 0} video đã lưu</span>
-      <span>Chỉ video dài hơn 3 phút · Ngày, giờ đăng: GMT+7</span>
-      {running ? <span className="flex items-center gap-1.5 text-indigo-600"><Loader2 size={13} className="animate-spin" />{channelId ? `Đang lấy video · ${data?.sync?.processed || 0} đã xử lý` : "Đang cập nhật video trong nhóm"}</span>
-        : data?.sync?.completedAt && <span>Lần hoàn tất: {published(data.sync.completedAt)}</span>}
-    </div>
-    {data?.sync?.error && <p role="status" className="mx-5 mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{data.sync.error}</p>}
     {loading ? <div className={column ? "grid grid-cols-1 gap-4 px-3 pb-3 @min-[640px]:grid-cols-2" : "grid gap-4 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-3"}>{[0, 1, 2].map(item => <div key={item} className="h-64 animate-pulse rounded-xl bg-slate-100" />)}</div>
       : data?.videos.length ? <div className={column ? "grid grid-cols-1 gap-4 px-3 pb-3 @min-[640px]:grid-cols-2" : "grid gap-4 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-3"}>
         {data.videos.map(video => <VideoCard key={video.id} video={video} onSelect={() => setSelected(video)} />)}
       </div> : <div className="px-5 py-12 text-center">
         <Film size={32} className="mx-auto mb-3 text-slate-300" />
         <p className="text-sm font-medium text-slate-600">{query ? "Không có video khớp từ khóa." : running ? "Đang tải những video đầu tiên…" : (channelId ? "Chưa có video được lưu cho kênh này." : "Chưa có video được lưu trong nhóm.")}</p>
-        {!query && !running && <p className="mt-2 text-xs text-slate-400">{canEdit ? (channelId ? "Bấm Đồng bộ toàn bộ video để bắt đầu." : "Chọn chế độ Một kênh để đồng bộ video của từng kênh.") : "Chủ nhóm hoặc người chỉnh sửa có thể đồng bộ video."}</p>}
+        {!query && !running && <p className="mt-2 text-xs text-slate-400">{canEdit ? (channelId ? "Bấm biểu tượng đồng bộ để lấy video." : "Chọn chế độ Một kênh để đồng bộ video của từng kênh.") : "Chủ nhóm hoặc người chỉnh sửa có thể đồng bộ video."}</p>}
       </div>}
     {data && data.total > 0 && <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-sm text-slate-500">
       <span>{data.total.toLocaleString("vi-VN")} kết quả · Trang {data.page}/{data.pages}</span>
@@ -194,12 +175,64 @@ function VideoCard({ video, onSelect }: { video: Video; onSelect: () => void }) 
   );
 }
 
+function ChannelAvatar({ channel }: { channel: LibraryChannel }) {
+  const [failed, setFailed] = useState(false);
+  return <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-indigo-50 text-xs font-semibold text-indigo-600">
+    {channel.logo_url && !failed ? <Image src={channel.logo_url} alt="" fill sizes="32px" className="object-cover" onError={() => setFailed(true)} /> : channel.title.charAt(0).toUpperCase()}
+  </span>;
+}
+
+function ChannelPicker({ channels, selected, onSelect }: { channels: LibraryChannel[]; selected: LibraryChannel; onSelect: (id: string) => void }) {
+  const root = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const outside = (event: PointerEvent) => {
+      if (root.current && !root.current.contains(event.target as Node)) root.current.open = false;
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, []);
+  return <details ref={root} className="relative w-full sm:w-80" onKeyDown={event => {
+    if (event.key === "Escape" && root.current) {
+      root.current.open = false;
+      root.current.querySelector("summary")?.focus();
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (root.current) root.current.open = true;
+      const options = Array.from(root.current?.querySelectorAll<HTMLButtonElement>("button") || []);
+      const current = options.indexOf(document.activeElement as HTMLButtonElement);
+      options[(current + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length]?.focus();
+    }
+  }}>
+    <summary aria-label="Chọn kênh xem video" className="flex cursor-pointer list-none items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-300 focus-visible:outline-indigo-500 [&::-webkit-details-marker]:hidden">
+      <ChannelAvatar key={selected.id} channel={selected} /><span className="min-w-0 flex-1 truncate">{selected.title}</span><ChevronDown size={16} className="shrink-0 text-slate-400" />
+    </summary>
+    <div className="absolute right-0 top-full z-30 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+      <div className="border-b border-slate-100 px-3 py-2 text-xs font-medium text-slate-400">Chọn kênh · {channels.length}</div>
+      <div role="group" aria-label="Danh sách kênh" className="max-h-80 overflow-y-auto p-1.5">
+        {channels.map(channel => <button key={channel.id} aria-pressed={selected.id === channel.id} onClick={() => {
+          onSelect(channel.id);
+          if (root.current) { root.current.open = false; root.current.querySelector("summary")?.focus(); }
+        }} className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition focus-visible:outline-indigo-500 ${selected.id === channel.id ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}>
+          <ChannelAvatar channel={channel} /><span className="min-w-0 flex-1 truncate" title={channel.title}>{channel.title}</span>{selected.id === channel.id && <Check size={16} className="shrink-0" />}
+        </button>)}
+      </div>
+    </div>
+  </details>;
+}
+
 export default function ChannelVideoLibrary({ channels, groupId, canEdit = false, initialChannelId }: {
   channels: LibraryChannel[]; groupId?: string; canEdit?: boolean; initialChannelId?: string;
 }) {
   const [selected, setSelected] = useState(initialChannelId || channels[0]?.id || "");
   const [mode, setMode] = useState<"single" | "all" | "columns">("single");
   const [sort, setSort] = useState("newest");
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [columns, setColumns] = useState(() => channels.slice(0, 3).map((channel, index) => ({ id: index, channelId: channel.id })));
   const nextColumnId = useRef(3);
   const channel = channels.find(channel => channel.id === selected) || channels[0];
@@ -207,7 +240,7 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
   const availableChannel = channels.find(channel => !visibleColumns.some(column => column.channelId === channel.id));
   if (!channel) return null;
   const selectClass = "min-w-0 max-w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700";
-  return <section id="video-library" className="scroll-mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  return <section id="video-library" className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5">
       <div><h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><Film size={19} className="text-indigo-500" />Thư viện video</h2><p className="mt-1 text-xs text-slate-500">Khám phá nội dung, lượt xem và lịch đăng của từng kênh.</p></div>
       <div role="group" aria-label="Sắp xếp video" className="flex gap-1 rounded-xl bg-slate-100 p-1">
@@ -224,18 +257,23 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
           <button key={value} title={label} aria-label={label} aria-pressed={mode === value} onClick={() => setMode(value)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition focus-visible:outline-indigo-500 ${mode === value ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}><Icon size={19} aria-hidden="true" /></button>
         )}
       </div>}
-      {mode === "single" && <select aria-label="Chọn kênh xem video" value={channel.id} onChange={event => setSelected(event.target.value)} className={selectClass}>
-        {channels.map(channel => <option key={channel.id} value={channel.id}>{channel.title}</option>)}
-      </select>}
-      {mode === "all" && <p className="text-xs text-slate-500">Video từ {channels.length} kênh, sắp xếp chung trong một danh sách.</p>}
+      {mode === "single" && <ChannelPicker channels={channels} selected={channel} onSelect={setSelected} />}
+      {/* {mode === "all" && <p className="text-xs text-slate-500">Video từ {channels.length} kênh, sắp xếp chung trong một danh sách.</p>} */}
       {mode === "columns" && <button disabled={!availableChannel} onClick={() => {
         if (availableChannel) setColumns(current => [...current, { id: nextColumnId.current++, channelId: availableChannel.id }]);
       }} className={buttonClass}><Plus size={15} />Thêm cột</button>}
     </div>
-    {mode === "single" && <VideoBrowser key={`single:${channel.id}:${sort}`} channel={channel} groupId={groupId} canEdit={canEdit} sort={sort} />}
-    {mode === "all" && groupId && <VideoBrowser key={`all:${groupId}:${sort}`} groupId={groupId} canEdit={canEdit} sort={sort} />}
+    <div className="px-5 pb-4">
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+        <input value={search} onChange={event => setSearch(event.target.value)} aria-label="Tìm tiêu đề video" placeholder="Tìm tiêu đề video..." className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-10 text-sm outline-none focus:border-indigo-400" />
+        {search && <button onClick={() => setSearch("")} aria-label="Xóa tìm kiếm" title="Xóa tìm kiếm" className="absolute right-2 top-2 rounded-md p-1 text-slate-400 hover:bg-slate-100"><X size={16} /></button>}
+      </div>
+    </div>
+    {mode === "single" && <VideoBrowser key={`single:${channel.id}:${sort}:${query}`} channel={channel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} />}
+    {mode === "all" && groupId && <VideoBrowser key={`all:${groupId}:${sort}:${query}`} groupId={groupId} canEdit={canEdit} sort={sort} query={query} />}
     {mode === "columns" && <>
-      <p className="px-5 pb-3 text-xs text-slate-500">Sắp xếp áp dụng cho mọi cột. Mỗi cột tìm kiếm và chuyển trang riêng; kéo ngang để xem thêm kênh.</p>
+      <p className="px-5 pb-3 text-xs text-slate-500">Tìm kiếm và sắp xếp áp dụng cho mọi cột. Mỗi cột chuyển trang riêng; kéo ngang để xem thêm kênh.</p>
       {!visibleColumns.length && <p className="p-8 text-center text-sm text-slate-500">Chưa có cột nào. Bấm Thêm cột để chọn kênh.</p>}
       <div aria-label="Danh sách cột video" tabIndex={0} className="flex items-start gap-4 overflow-x-auto px-5 pb-5">
         {visibleColumns.map((column, index) => {
@@ -248,7 +286,7 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
               <button aria-label={`Xóa cột ${index + 1}`} onClick={() => setColumns(current => current.filter(item => item.id !== column.id))} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X size={16} /></button>
             </div>
             <div className="max-h-[75vh] overflow-y-auto">
-              <VideoBrowser key={`${column.channelId}:${sort}`} channel={columnChannel} groupId={groupId} canEdit={canEdit} sort={sort} column />
+              <VideoBrowser key={`${column.channelId}:${sort}:${query}`} channel={columnChannel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} column />
             </div>
           </section>;
         })}
