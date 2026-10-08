@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { getVideoDetails, listChannelVideos, startVideoSync } from "@/app/actions/videoActions";
 
@@ -182,43 +182,80 @@ function ChannelAvatar({ channel }: { channel: LibraryChannel }) {
   </span>;
 }
 
-function ChannelPicker({ channels, selected, onSelect }: { channels: LibraryChannel[]; selected: LibraryChannel; onSelect: (id: string) => void }) {
-  const root = useRef<HTMLDetailsElement>(null);
+function ChannelPicker({ channels, selected, onSelect, label = "Chọn kênh xem video" }: { channels: LibraryChannel[]; selected: LibraryChannel; onSelect: (id: string) => void; label?: string }) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  function show() {
+    const rect = trigger.current?.getBoundingClientRect();
+    if (!rect || !popup.current) return;
+    const below = window.innerHeight - rect.bottom - 12;
+    const height = Math.min(360, Math.max(below, rect.top - 12));
+    Object.assign(popup.current.style, {
+      width: `${Math.min(rect.width, window.innerWidth - 16)}px`,
+      left: `${Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8))}px`,
+      top: below >= Math.min(360, rect.top - 12) ? `${rect.bottom + 6}px` : "auto",
+      bottom: below >= Math.min(360, rect.top - 12) ? "auto" : `${window.innerHeight - rect.top + 6}px`,
+      maxHeight: `${height}px`,
+    });
+    popup.current.showPopover();
+  }
   useEffect(() => {
-    const outside = (event: PointerEvent) => {
-      if (root.current && !root.current.contains(event.target as Node)) root.current.open = false;
+    const close = (event: Event) => {
+      if (event.type === "wheel" && popup.current?.contains(event.target as Node)) return;
+      popup.current?.hidePopover();
     };
-    document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
+    window.addEventListener("resize", close);
+    window.addEventListener("wheel", close, true);
+    return () => { window.removeEventListener("resize", close); window.removeEventListener("wheel", close, true); };
   }, []);
-  return <details ref={root} className="relative w-full sm:w-80" onKeyDown={event => {
-    if (event.key === "Escape" && root.current) {
-      root.current.open = false;
-      root.current.querySelector("summary")?.focus();
-    }
+  return <div className="min-w-0 flex-1" onKeyDown={event => {
+    if (event.key === "Escape") { popup.current?.hidePopover(); trigger.current?.focus(); }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (root.current) root.current.open = true;
-      const options = Array.from(root.current?.querySelectorAll<HTMLButtonElement>("button") || []);
+      if (!open) show();
+      const options = Array.from(popup.current?.querySelectorAll<HTMLButtonElement>("button") || []);
       const current = options.indexOf(document.activeElement as HTMLButtonElement);
-      options[(current + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length]?.focus();
+      const next = current < 0 ? (event.key === "ArrowDown" ? 0 : options.length - 1) : (current + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+      options[next]?.focus();
     }
   }}>
-    <summary aria-label="Chọn kênh xem video" className="flex cursor-pointer list-none items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-300 focus-visible:outline-indigo-500 [&::-webkit-details-marker]:hidden">
-      <ChannelAvatar key={selected.id} channel={selected} /><span className="min-w-0 flex-1 truncate">{selected.title}</span><ChevronDown size={16} className="shrink-0 text-slate-400" />
-    </summary>
-    <div className="absolute right-0 top-full z-30 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-      <div className="border-b border-slate-100 px-3 py-2 text-xs font-medium text-slate-400">Chọn kênh · {channels.length}</div>
-      <div role="group" aria-label="Danh sách kênh" className="max-h-80 overflow-y-auto p-1.5">
+    <button ref={trigger} aria-label={label} aria-expanded={open} aria-controls={id} onClick={() => open ? popup.current?.hidePopover() : show()} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-300 focus-visible:outline-indigo-500">
+      <ChannelAvatar key={selected.id} channel={selected} /><span className="min-w-0 flex-1 truncate text-left">{selected.title}</span><ChevronDown size={16} className="shrink-0 text-slate-400" />
+    </button>
+    <div id={id} ref={popup} popover="auto" onToggle={event => setOpen(event.newState === "open")} style={{ position: "fixed", inset: "auto", margin: 0 }} className="overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+      <div className="px-2 py-2 text-xs font-medium text-slate-400">Chọn kênh · {channels.length}</div>
+      <div role="group" aria-label="Danh sách kênh">
         {channels.map(channel => <button key={channel.id} aria-pressed={selected.id === channel.id} onClick={() => {
-          onSelect(channel.id);
-          if (root.current) { root.current.open = false; root.current.querySelector("summary")?.focus(); }
+          onSelect(channel.id); popup.current?.hidePopover(); trigger.current?.focus();
         }} className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition focus-visible:outline-indigo-500 ${selected.id === channel.id ? "bg-indigo-50 font-semibold text-indigo-700" : "text-slate-600 hover:bg-slate-50"}`}>
           <ChannelAvatar channel={channel} /><span className="min-w-0 flex-1 truncate" title={channel.title}>{channel.title}</span>{selected.id === channel.id && <Check size={16} className="shrink-0" />}
         </button>)}
       </div>
     </div>
-  </details>;
+  </div>;
+}
+
+function AddColumnsModal({ channels, onAdd, onClose }: { channels: LibraryChannel[]; onAdd: (ids: string[]) => void; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const titleId = useId();
+  useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close(); }, []);
+  const ids = selected.filter(id => channels.some(channel => channel.id === id));
+  return <dialog ref={dialog} aria-labelledby={titleId} onCancel={onClose} className="fixed inset-0 m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl backdrop:bg-slate-900/40">
+    <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><h2 id={titleId} className="font-semibold text-slate-900">Chọn kênh thêm vào cột</h2><button onClick={onClose} aria-label="Đóng chọn kênh" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18} /></button></div>
+    <div className="max-h-[50dvh] space-y-1 overflow-y-auto p-3">
+      {channels.map(channel => <label key={channel.id} className={`flex cursor-pointer items-center gap-3 rounded-xl p-3 ${ids.includes(channel.id) ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+        <input type="checkbox" checked={ids.includes(channel.id)} onChange={event => setSelected(current => event.target.checked ? [...current, channel.id] : current.filter(id => id !== channel.id))} className="h-4 w-4 accent-indigo-600" />
+        <ChannelAvatar channel={channel} /><span className="min-w-0 truncate text-sm text-slate-700">{channel.title}</span>
+      </label>)}
+    </div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 p-4">
+      <button disabled={!channels.length} onClick={() => onAdd(channels.map(channel => channel.id))} className={buttonClass}>Thêm tất cả ({channels.length})</button>
+      <button disabled={!ids.length} onClick={() => onAdd(ids)} className={`${buttonClass} !border-indigo-600 !bg-indigo-600 !text-white`}>Thêm đã chọn ({ids.length})</button>
+    </div>
+  </dialog>;
 }
 
 export default function ChannelVideoLibrary({ channels, groupId, canEdit = false, initialChannelId }: {
@@ -237,12 +274,17 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
   const nextColumnId = useRef(3);
   const channel = channels.find(channel => channel.id === selected) || channels[0];
   const visibleColumns = columns.filter(column => channels.some(channel => channel.id === column.channelId));
-  const availableChannel = channels.find(channel => !visibleColumns.some(column => column.channelId === channel.id));
+  const availableChannels = channels.filter(channel => !visibleColumns.some(column => column.channelId === channel.id));
+  const [addingColumns, setAddingColumns] = useState(false);
+  function addColumns(ids: string[]) {
+    const additions = availableChannels.filter(channel => ids.includes(channel.id)).map(channel => ({ id: nextColumnId.current++, channelId: channel.id }));
+    setColumns(current => [...current, ...additions.filter(item => !current.some(existing => existing.channelId === item.channelId))]);
+    setAddingColumns(false);
+  }
   if (!channel) return null;
-  const selectClass = "min-w-0 max-w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700";
   return <section id="video-library" className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5">
-      <div><h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><Film size={19} className="text-indigo-500" />Thư viện video</h2><p className="mt-1 text-xs text-slate-500">Khám phá nội dung, lượt xem và lịch đăng của từng kênh.</p></div>
+      <div><h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><Film size={19} className="text-indigo-500" />Thư viện video</h2></div>
       <div role="group" aria-label="Sắp xếp video" className="flex gap-1 rounded-xl bg-slate-100 p-1">
         {([
           ["newest", "Mới nhất", ArrowDownWideNarrow],
@@ -257,10 +299,11 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
           <button key={value} title={label} aria-label={label} aria-pressed={mode === value} onClick={() => setMode(value)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition focus-visible:outline-indigo-500 ${mode === value ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}><Icon size={19} aria-hidden="true" /></button>
         )}
       </div>}
-      {mode === "single" && <ChannelPicker channels={channels} selected={channel} onSelect={setSelected} />}
+      {mode === "single" && <div className="w-full sm:w-80"><ChannelPicker channels={channels} selected={channel} onSelect={setSelected} /></div>}
       {/* {mode === "all" && <p className="text-xs text-slate-500">Video từ {channels.length} kênh, sắp xếp chung trong một danh sách.</p>} */}
-      {mode === "columns" && <button disabled={!availableChannel} onClick={() => {
-        if (availableChannel) setColumns(current => [...current, { id: nextColumnId.current++, channelId: availableChannel.id }]);
+      {mode === "columns" && <button disabled={!availableChannels.length} onClick={() => {
+        if (availableChannels.length === 1) addColumns([availableChannels[0].id]);
+        else setAddingColumns(true);
       }} className={buttonClass}><Plus size={15} />Thêm cột</button>}
     </div>
     <div className="px-5 pb-4">
@@ -273,16 +316,15 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
     {mode === "single" && <VideoBrowser key={`single:${channel.id}:${sort}:${query}`} channel={channel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} />}
     {mode === "all" && groupId && <VideoBrowser key={`all:${groupId}:${sort}:${query}`} groupId={groupId} canEdit={canEdit} sort={sort} query={query} />}
     {mode === "columns" && <>
-      <p className="px-5 pb-3 text-xs text-slate-500">Tìm kiếm và sắp xếp áp dụng cho mọi cột. Mỗi cột chuyển trang riêng; kéo ngang để xem thêm kênh.</p>
       {!visibleColumns.length && <p className="p-8 text-center text-sm text-slate-500">Chưa có cột nào. Bấm Thêm cột để chọn kênh.</p>}
       <div aria-label="Danh sách cột video" tabIndex={0} className="flex items-start gap-4 overflow-x-auto px-5 pb-5">
         {visibleColumns.map((column, index) => {
           const columnChannel = channels.find(channel => channel.id === column.channelId)!;
           return <section key={column.id} aria-label={`Cột ${index + 1}`} className="@container min-w-[min(340px,calc(100vw-4rem))] flex-1 basis-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/40">
             <div className="flex items-center gap-2 p-3">
-              <select aria-label={`Kênh cột ${index + 1}`} value={column.channelId} className={`${selectClass} flex-1`} onChange={event => setColumns(current => current.map(item => item.id === column.id ? { ...item, channelId: event.target.value } : item))}>
-                {channels.map(channel => <option key={channel.id} value={channel.id} disabled={visibleColumns.some(item => item.id !== column.id && item.channelId === channel.id)}>{channel.title}</option>)}
-              </select>
+              <ChannelPicker label={`Kênh cột ${index + 1}`} selected={columnChannel}
+                channels={channels.filter(channel => channel.id === column.channelId || !visibleColumns.some(item => item.channelId === channel.id))}
+                onSelect={id => setColumns(current => current.map(item => item.id === column.id ? { ...item, channelId: id } : item))} />
               <button aria-label={`Xóa cột ${index + 1}`} onClick={() => setColumns(current => current.filter(item => item.id !== column.id))} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X size={16} /></button>
             </div>
             <div className="max-h-[75vh] overflow-y-auto">
@@ -292,5 +334,6 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
         })}
       </div>
     </>}
+    {addingColumns && <AddColumnsModal channels={availableChannels} onAdd={addColumns} onClose={() => setAddingColumns(false)} />}
   </section>;
 }
