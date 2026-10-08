@@ -47,6 +47,7 @@ Viewer access is read-only; owners/editors can sync videos.
 
 Videos are upserted by YouTube ID in batches of up to 50, linked by channel foreign key.
 Date/time displays use GMT+7.
+Only public videos with a known duration greater than 180 seconds are imported and displayed (including in counts and search). This conservative filter also excludes regular videos of three minutes or less; previously saved short/unknown-duration records remain in the database but are hidden.
 Only public videos returned by YouTube are importable; this downloads metadata, not MP4 files.
 Previously saved videos remain when YouTube no longer returns them; counts can therefore differ from the current public channel count.
 
@@ -59,7 +60,7 @@ Run the pagination/metadata regression checks with `node --test tests/youtube-vi
 ## Key Features
 
 - Channel video library with server-side search, date/view sorting, pagination and descriptions.
-- Adding or refreshing a channel also starts its full public uploads sync (including short videos).
+- Adding or refreshing a channel also starts its full public uploads sync (only videos longer than 180 seconds).
 - Credentials-based authentication with `NextAuth`
 - Automatic redirect from `/` to `/login` or `/dashboard` depending on session state
 - Create, rename, update, and delete comparison groups

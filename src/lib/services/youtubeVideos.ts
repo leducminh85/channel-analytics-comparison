@@ -1,3 +1,10 @@
+// Conservative long-form policy: exclude short and unknown-duration videos.
+export const MIN_VIDEO_DURATION_SECONDS = 180;
+
+export function isLongVideo(seconds: number | null): boolean {
+  return seconds !== null && Number.isFinite(seconds) && seconds > MIN_VIDEO_DURATION_SECONDS;
+}
+
 export function parseDuration(value: string): number | null {
   const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(value);
   if (!match || !match.slice(1).some(Boolean)) return null;
@@ -60,7 +67,7 @@ export async function* fetchVideoPages(channelId: string) {
       durationSeconds: parseDuration(item.contentDetails?.duration || ""),
       viewCount: BigInt(item.statistics?.viewCount || "0"),
       syncedAt: new Date(),
-    }));
+    })).filter(video => isLongVideo(video.durationSeconds));
     pageToken = page.nextPageToken || "";
     if (pageToken && tokens.has(pageToken)) throw new Error("YouTube trả trang trùng lặp. Hãy thử đồng bộ lại.");
     tokens.add(pageToken);

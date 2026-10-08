@@ -144,7 +144,7 @@ function VideoBrowser({ channel, groupId, canEdit, sort, column = false }: { cha
     {error && <div role="alert" className="mx-5 mb-4 flex items-center justify-between rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}<button onClick={() => setRevision(value => value + 1)} className="ml-3 underline">Tải lại</button></div>}
     <div aria-live="polite" className="mx-5 mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
       <span className="font-semibold text-slate-700">{data?.saved.toLocaleString("vi-VN") || 0} video đã lưu</span>
-      <span>Ngày, giờ đăng: GMT+7</span>
+      <span>Chỉ video dài hơn 3 phút · Ngày, giờ đăng: GMT+7</span>
       {running ? <span className="flex items-center gap-1.5 text-indigo-600"><Loader2 size={13} className="animate-spin" />{channelId ? `Đang lấy video · ${data?.sync?.processed || 0} đã xử lý` : "Đang cập nhật video trong nhóm"}</span>
         : data?.sync?.completedAt && <span>Lần hoàn tất: {published(data.sync.completedAt)}</span>}
     </div>

@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getSessionUserId, requireGroupAccess } from "@/lib/groupAccess";
 import { ACTIVE_SYNC_STATUSES, SYNC_LEASE_MS, scheduleVideoSync } from "@/lib/services/videoSync";
+import { MIN_VIDEO_DURATION_SECONDS } from "@/lib/services/youtubeVideos";
 
 async function authorize(channelId: string, groupId?: string, write = false) {
   const session = await getServerSession(authOptions);
@@ -30,6 +31,7 @@ export async function listChannelVideos(input: { channelId?: string; groupId?: s
     await requireGroupAccess(input.groupId, userId, ["OWNER", "EDITOR", "VIEWER"]);
     scope = { channel: { groups: { some: { groupId: input.groupId } } } };
   }
+  scope = { ...scope, durationSeconds: { gt: MIN_VIDEO_DURATION_SECONDS } };
   const where: Prisma.ChannelVideoWhereInput = {
     ...scope,
     ...(input.search?.trim() ? { title: { contains: input.search.trim().slice(0, 200), mode: "insensitive" } } : {}),
@@ -69,7 +71,7 @@ export async function listChannelVideos(input: { channelId?: string; groupId?: s
 export async function getVideoDetails(channelId: string, videoId: string, groupId?: string) {
   await authorize(channelId, groupId);
   const video = await prisma.channelVideo.findFirstOrThrow({
-    where: { id: videoId, channelId },
+    where: { id: videoId, channelId, durationSeconds: { gt: MIN_VIDEO_DURATION_SECONDS } },
     select: { id: true, description: true },
   });
   return video;
