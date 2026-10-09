@@ -20,7 +20,7 @@ async function authorize(channelId: string, groupId?: string, write = false) {
   if (!link) throw new Error("Kênh không thuộc nhóm này.");
 }
 
-export async function listChannelVideos(input: { channelId?: string; groupId?: string; page?: number; search?: string; sort?: string; breakoutOnly?: boolean; startDate?: string; endDate?: string }) {
+export async function listChannelVideos(input: { channelId?: string; groupId?: string; page?: number; pageSize?: number; search?: string; sort?: string; breakoutOnly?: boolean; startDate?: string; endDate?: string }) {
   let scope: Prisma.ChannelVideoWhereInput;
   if (input.channelId) {
     await authorize(input.channelId, input.groupId);
@@ -48,7 +48,7 @@ export async function listChannelVideos(input: { channelId?: string; groupId?: s
       status: { in: ACTIVE_SYNC_STATUSES }, heartbeatAt: { gte: new Date(Date.now() - SYNC_LEASE_MS) },
     } }),
   ]);
-  const pageSize = 12;
+  const pageSize = Math.min(60, Math.max(1, Math.floor(Number(input.pageSize) || 12)));
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(pages, Math.max(1, Math.floor(Number(input.page) || 1)));
   const orderBy: Prisma.ChannelVideoOrderByWithRelationInput[] = input.breakoutOnly && input.sort === "breakout"

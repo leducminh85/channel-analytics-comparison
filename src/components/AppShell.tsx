@@ -1,8 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import { PanelLeftOpen } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
+
+const sidebarStorageKey = "channelCompare.sidebarOpen";
+const sidebarChangeEvent = "channelCompare.sidebarChanged";
+function subscribeSidebar(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(sidebarChangeEvent, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(sidebarChangeEvent, onChange);
+  };
+}
+let sidebarFallback = true;
+function getSidebarSnapshot() {
+  try { return window.localStorage.getItem(sidebarStorageKey) !== "false"; }
+  catch { return sidebarFallback; }
+}
+function getServerSidebarSnapshot() { return true; }
 
 interface CompareGroup {
   id: string;
@@ -18,17 +35,13 @@ export default function AppShell({
   groups: CompareGroup[];
   children: React.ReactNode;
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem("channelCompare.sidebarOpen") !== "false";
-  });
+  const sidebarOpen = useSyncExternalStore(subscribeSidebar, getSidebarSnapshot, getServerSidebarSnapshot);
 
   const toggleSidebar = () => {
-    setSidebarOpen((current) => {
-      const next = !current;
-      window.localStorage.setItem("channelCompare.sidebarOpen", String(next));
-      return next;
-    });
+    sidebarFallback = !sidebarOpen;
+    try { window.localStorage.setItem(sidebarStorageKey, String(sidebarFallback)); }
+    catch { /* Keep the toggle usable when browser storage is unavailable. */ }
+    window.dispatchEvent(new Event(sidebarChangeEvent));
   };
 
   return (

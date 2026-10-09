@@ -87,6 +87,9 @@ function VideoDetail({ video, channelId, groupId, onClose }: {
 
 function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, startDate, endDate, column = false }: { channel?: LibraryChannel; groupId?: string; canEdit: boolean; sort: string; query: string; breakoutOnly: boolean; startDate: string; endDate: string; column?: boolean }) {
   const channelId = channel?.id;
+  const browserRef = useRef<HTMLDivElement>(null);
+  const measuredPageSize = useRef<number | null>(null);
+  const [pageSize, setPageSize] = useState<number | null>(null);
   const [data, setData] = useState<LibraryData | null>(null);
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
@@ -95,14 +98,40 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, st
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<Video | null>(null);
   const running = data?.isSyncing;
+  const gridClass = column
+    ? "grid grid-cols-1 gap-3 px-3 pb-3 @min-[640px]:grid-cols-2"
+    : "grid grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-3 px-5 pb-5";
 
   useEffect(() => {
+    const element = browserRef.current;
+    if (!element) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const width = element.getBoundingClientRect().width;
+        const columns = column ? (width >= 640 ? 2 : 1) : Math.max(1, Math.floor((width - 40 + 12) / (340 + 12)));
+        // Keep complete rows with at least 12 videos, including after a sidebar resize.
+        const nextSize = Math.min(60, Math.ceil(12 / columns) * columns);
+        if (measuredPageSize.current !== nextSize) {
+          measuredPageSize.current = nextSize;
+          setPageSize(nextSize);
+          setPage(1);
+        }
+      }, 150);
+    });
+    observer.observe(element);
+    return () => { clearTimeout(timer); observer.disconnect(); };
+  }, [column]);
+
+  useEffect(() => {
+    if (pageSize === null) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     async function load(initial: boolean) {
       if (initial) setLoading(true);
       try {
-        const next = await listChannelVideos({ channelId, groupId, page, search: query, sort, breakoutOnly, startDate, endDate });
+        const next = await listChannelVideos({ channelId, groupId, page, pageSize: pageSize ?? 12, search: query, sort, breakoutOnly, startDate, endDate });
         if (cancelled) return;
         setData(next);
         setError("");
@@ -112,7 +141,7 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, st
     }
     void load(true);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [channelId, groupId, page, query, sort, revision, breakoutOnly, startDate, endDate]);
+  }, [channelId, groupId, page, pageSize, query, sort, revision, breakoutOnly, startDate, endDate]);
 
   async function sync() {
     if (!channelId) return;
@@ -123,15 +152,15 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, st
     finally { setStarting(false); }
   }
 
-  return <>
+  return <div ref={browserRef} className="min-w-0">
     {canEdit && channelId && <div className="flex justify-end px-3 pb-3">
       <button onClick={sync} disabled={starting || running} title={data?.sync?.error || "Đồng bộ video"} aria-label="Đồng bộ video" className={`${buttonClass} !h-9 !w-9 !p-0 !border-indigo-200 !bg-indigo-50 !text-indigo-600`}>
         <RefreshCw size={16} className={starting || running ? "animate-spin" : ""} />
       </button>
     </div>}
     {error && <div role="alert" className="mx-5 mb-4 flex items-center justify-between rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}<button onClick={() => setRevision(value => value + 1)} className="ml-3 underline">Tải lại</button></div>}
-    {loading ? <div className={column ? "grid grid-cols-1 gap-4 px-3 pb-3 @min-[640px]:grid-cols-2" : "grid gap-4 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-3"}>{[0, 1, 2].map(item => <div key={item} className="h-64 animate-pulse rounded-xl bg-slate-100" />)}</div>
-      : data?.videos.length ? <div className={column ? "grid grid-cols-1 gap-4 px-3 pb-3 @min-[640px]:grid-cols-2" : "grid gap-4 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-3"}>
+    {loading ? <div className={gridClass}>{[0, 1, 2].map(item => <div key={item} className="h-64 animate-pulse rounded-xl bg-slate-100" />)}</div>
+      : data?.videos.length ? <div className={gridClass}>
         {data.videos.map(video => <VideoCard key={video.id} video={video} onSelect={() => setSelected(video)} />)}
       </div> : <div className="px-5 py-12 text-center">
         <Film size={32} className="mx-auto mb-3 text-slate-300" />
@@ -143,20 +172,20 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, st
       <div className="flex gap-2"><button aria-label="Trang trước" disabled={loading || data.page <= 1} onClick={() => setPage(data.page - 1)} className={buttonClass}><ChevronLeft size={16} /></button><button aria-label="Trang sau" disabled={loading || data.page >= data.pages} onClick={() => setPage(data.page + 1)} className={buttonClass}><ChevronRight size={16} /></button></div>
     </div>}
     {selected && <VideoDetail key={selected.id} video={selected} channelId={selected.channelId} groupId={groupId} onClose={() => { setSelected(null); setRevision(value => value + 1); }} />}
-  </>;
+  </div>;
 }
 
 function VideoCard({ video, onSelect }: { video: Video; onSelect: () => void }) {
   const [logoFailed, setLogoFailed] = useState(false);
-  return (<button onClick={onSelect} className="group flex h-full w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left transition hover:border-indigo-300 hover:shadow-md focus-visible:outline-indigo-500">
-          <div className="relative aspect-video w-full shrink-0 bg-slate-100">
-            {video.thumbnail ? <Image src={video.thumbnail} alt="" fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw" className="object-cover" /> : <Film className="absolute inset-0 m-auto text-slate-300" size={32} />}
+  return (<button onClick={onSelect} className="group flex h-full w-full flex-col overflow-hidden rounded-xl bg-transparent p-2 text-left transition-colors hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-indigo-500">
+          <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg bg-slate-100">
+            {video.thumbnail ? <Image src={video.thumbnail} alt="" fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1440px) 33vw, 25vw" className="object-cover" /> : <Film className="absolute inset-0 m-auto text-slate-300" size={32} />}
             {video.breakoutScore !== null && video.breakoutScore > 2 && <span title={`Điểm đột biến: ${video.breakoutScore}x`} aria-label={`Điểm đột biến ${video.breakoutScore}x`} className={`absolute bottom-2 left-2 rounded-md px-1.5 py-0.5 text-xs font-bold text-white shadow-sm ${video.breakoutScore >= 10 ? "bg-rose-600" : "bg-blue-600"}`}>
               {new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(video.breakoutScore)}x
             </span>}
             <span className="absolute bottom-2 right-2 rounded bg-slate-950/85 px-1.5 py-0.5 font-mono text-xs text-white">{duration(video.durationSeconds)}</span>
           </div>
-          <div className="flex w-full items-start gap-2.5 p-3">
+          <div className="flex w-full items-start gap-2.5 px-1 pb-1 pt-3">
               <span className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-indigo-50 text-sm font-semibold text-indigo-600">
                 {video.channel.logo_url && !logoFailed ? (
                   <Image src={video.channel.logo_url} alt="" fill sizes="36px" className="object-cover" onError={() => setLogoFailed(true)} />
