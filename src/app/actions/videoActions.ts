@@ -51,7 +51,9 @@ export async function listChannelVideos(input: { channelId?: string; groupId?: s
   const pageSize = 12;
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(pages, Math.max(1, Math.floor(Number(input.page) || 1)));
-  const orderBy: Prisma.ChannelVideoOrderByWithRelationInput[] = input.sort === "views"
+  const orderBy: Prisma.ChannelVideoOrderByWithRelationInput[] = input.breakoutOnly && input.sort === "breakout"
+    ? [{ breakoutScore: { sort: "desc", nulls: "last" } }, { id: "desc" }]
+    : input.sort === "views"
     ? [{ viewCount: "desc" }, { id: "desc" }]
     : [{ publishedAt: { sort: input.sort === "oldest" ? "asc" : "desc", nulls: "last" } }, { id: "desc" }];
   const videos = await prisma.channelVideo.findMany({

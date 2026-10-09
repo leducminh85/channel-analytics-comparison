@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, CalendarRange, Zap, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, CalendarRange, TrendingUp, Zap, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { getVideoDetails, listChannelVideos, startVideoSync } from "@/app/actions/videoActions";
 
 type LibraryData = Awaited<ReturnType<typeof listChannelVideos>>;
@@ -297,7 +297,10 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
       <div><h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><Film size={19} className="text-indigo-500" />Thư viện video</h2></div>
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label="Lọc video" className="flex gap-1 rounded-xl bg-slate-100 p-1">
-          <button title="Video đột biến (điểm > 2)" aria-label="Video đột biến" aria-pressed={breakoutOnly} onClick={() => setBreakoutOnly(current => !current)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${breakoutOnly ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:text-blue-600"}`}><Zap size={19} /></button>
+          <button title="Video đột biến (điểm > 2)" aria-label="Video đột biến" aria-pressed={breakoutOnly} onClick={() => {
+            setBreakoutOnly(!breakoutOnly);
+            if (breakoutOnly && sort === "breakout") setSort("newest");
+          }} className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${breakoutOnly ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:text-blue-600"}`}><Zap size={19} /></button>
           <button title="Lọc ngày đăng (GMT+7)" aria-label="Lọc ngày đăng" aria-expanded={datesOpen} aria-controls={datePanelId} onClick={() => setDatesOpen(current => !current)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${startDate || endDate ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-indigo-600"}`}><CalendarRange size={19} /></button>
         </div>
       <div role="group" aria-label="Sắp xếp video" className="flex gap-1 rounded-xl bg-slate-100 p-1">
@@ -305,7 +308,8 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
           ["newest", "Mới nhất", ArrowDownWideNarrow],
           ["oldest", "Cũ nhất", ArrowUpWideNarrow],
           ["views", "Phổ biến nhất (lượt xem)", ChartNoAxesColumnIncreasing],
-        ] as const).map(([value, label, Icon]) => <button key={value} title={label} aria-label={label} aria-pressed={sort === value} onClick={() => setSort(value)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition focus-visible:outline-indigo-500 ${sort === value ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}><Icon size={19} aria-hidden="true" /></button>)}
+          ["breakout", "Điểm đột biến cao nhất", TrendingUp],
+        ] as const).filter(([value]) => value !== "breakout" || breakoutOnly).map(([value, label, Icon]) => <button key={value} title={label} aria-label={label} aria-pressed={sort === value} onClick={() => setSort(value)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition focus-visible:outline-indigo-500 ${sort === value ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}><Icon size={19} aria-hidden="true" /></button>)}
       </div>
       </div>
     </div>
