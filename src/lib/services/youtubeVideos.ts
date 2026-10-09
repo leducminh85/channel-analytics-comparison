@@ -62,7 +62,7 @@ export async function* fetchVideoPages(channelId: string) {
       id: item.id,
       title: item.snippet.title,
       description: item.snippet.description || "",
-      thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || null,
+      thumbnail: item.snippet.thumbnails?.maxres?.url || item.snippet.thumbnails?.standard?.url || item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || null,
       publishedAt: item.snippet.publishedAt ? new Date(item.snippet.publishedAt) : null,
       durationSeconds: parseDuration(item.contentDetails?.duration || ""),
       viewCount: BigInt(item.statistics?.viewCount || "0"),

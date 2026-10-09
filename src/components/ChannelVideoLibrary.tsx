@@ -148,19 +148,19 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, column = false }
 
 function VideoCard({ video, onSelect }: { video: Video; onSelect: () => void }) {
   const [logoFailed, setLogoFailed] = useState(false);
-  return (<button onClick={onSelect} className="group overflow-hidden rounded-xl border border-slate-200 bg-white text-left transition hover:border-indigo-300 hover:shadow-md focus-visible:outline-indigo-500">
-          <div className="relative aspect-video bg-slate-100">
+  return (<button onClick={onSelect} className="group flex h-full w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left transition hover:border-indigo-300 hover:shadow-md focus-visible:outline-indigo-500">
+          <div className="relative aspect-video w-full shrink-0 bg-slate-100">
             {video.thumbnail ? <Image src={video.thumbnail} alt="" fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw" className="object-cover" /> : <Film className="absolute inset-0 m-auto text-slate-300" size={32} />}
             <span className="absolute bottom-2 right-2 rounded bg-slate-950/85 px-1.5 py-0.5 font-mono text-xs text-white">{duration(video.durationSeconds)}</span>
           </div>
-          <div className="flex items-start gap-2.5 p-3">
+          <div className="flex w-full items-start gap-2.5 p-3">
               <span className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-indigo-50 text-sm font-semibold text-indigo-600">
                 {video.channel.logo_url && !logoFailed ? (
                   <Image src={video.channel.logo_url} alt="" fill sizes="36px" className="object-cover" onError={() => setLogoFailed(true)} />
                 ) : video.channel.title.charAt(0).toUpperCase()}
               </span>
             <div className="min-w-0 flex-1">
-              <h3 title={video.title} className="line-clamp-2 text-sm font-semibold leading-5 text-slate-800 group-hover:text-indigo-600">{video.title}</h3>
+              <h3 title={video.title} className="line-clamp-2 h-10 break-words text-sm font-semibold leading-5 text-slate-800 group-hover:text-indigo-600">{video.title}</h3>
               <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs leading-5 text-slate-500">
                 <span title={video.channel.title} className="min-w-0 truncate font-medium">{video.channel.title}</span>
                 <span title={`${BigInt(video.viewCount).toLocaleString("vi-VN")} lượt xem`} className="inline-flex shrink-0 items-center gap-1">
