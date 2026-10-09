@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma";
 import { getSessionUserId, requireGroupAccess } from "@/lib/groupAccess";
 import { ACTIVE_SYNC_STATUSES, SYNC_LEASE_MS, scheduleVideoSync } from "@/lib/services/videoSync";
 import { MIN_VIDEO_DURATION_SECONDS } from "@/lib/services/youtubeVideos";
+import { publicationRange } from "@/lib/videoFilters";
 
 async function authorize(channelId: string, groupId?: string, write = false) {
   const session = await getServerSession(authOptions);
@@ -19,7 +20,7 @@ async function authorize(channelId: string, groupId?: string, write = false) {
   if (!link) throw new Error("Kênh không thuộc nhóm này.");
 }
 
-export async function listChannelVideos(input: { channelId?: string; groupId?: string; page?: number; search?: string; sort?: string }) {
+export async function listChannelVideos(input: { channelId?: string; groupId?: string; page?: number; search?: string; sort?: string; breakoutOnly?: boolean; startDate?: string; endDate?: string }) {
   let scope: Prisma.ChannelVideoWhereInput;
   if (input.channelId) {
     await authorize(input.channelId, input.groupId);
@@ -34,6 +35,8 @@ export async function listChannelVideos(input: { channelId?: string; groupId?: s
   scope = { ...scope, durationSeconds: { gt: MIN_VIDEO_DURATION_SECONDS } };
   const where: Prisma.ChannelVideoWhereInput = {
     ...scope,
+    ...(input.breakoutOnly ? { breakoutScore: { gt: 2 } } : {}),
+    ...((input.startDate || input.endDate) ? { publishedAt: publicationRange(input.startDate, input.endDate) } : {}),
     ...(input.search?.trim() ? { title: { contains: input.search.trim().slice(0, 200), mode: "insensitive" } } : {}),
   };
   const [total, saved, sync, activeGroupSyncs] = await Promise.all([
@@ -53,7 +56,7 @@ export async function listChannelVideos(input: { channelId?: string; groupId?: s
     : [{ publishedAt: { sort: input.sort === "oldest" ? "asc" : "desc", nulls: "last" } }, { id: "desc" }];
   const videos = await prisma.channelVideo.findMany({
     where, orderBy, skip: (page - 1) * pageSize, take: pageSize,
-    select: { id: true, channelId: true, channel: { select: { id: true, title: true, logo_url: true } }, title: true, thumbnail: true, durationSeconds: true, viewCount: true, publishedAt: true },
+    select: { id: true, channelId: true, channel: { select: { id: true, title: true, logo_url: true } }, title: true, thumbnail: true, durationSeconds: true, viewCount: true, publishedAt: true, breakoutScore: true },
   });
   const stale = Boolean(sync && ACTIVE_SYNC_STATUSES.includes(sync.status) && sync.heartbeatAt.getTime() < Date.now() - SYNC_LEASE_MS);
   return {

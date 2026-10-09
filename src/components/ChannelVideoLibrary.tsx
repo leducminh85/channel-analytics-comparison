@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, CalendarRange, Zap, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { getVideoDetails, listChannelVideos, startVideoSync } from "@/app/actions/videoActions";
 
 type LibraryData = Awaited<ReturnType<typeof listChannelVideos>>;
@@ -85,7 +85,7 @@ function VideoDetail({ video, channelId, groupId, onClose }: {
   );
 }
 
-function VideoBrowser({ channel, groupId, canEdit, sort, query, column = false }: { channel?: LibraryChannel; groupId?: string; canEdit: boolean; sort: string; query: string; column?: boolean }) {
+function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, startDate, endDate, column = false }: { channel?: LibraryChannel; groupId?: string; canEdit: boolean; sort: string; query: string; breakoutOnly: boolean; startDate: string; endDate: string; column?: boolean }) {
   const channelId = channel?.id;
   const [data, setData] = useState<LibraryData | null>(null);
   const [page, setPage] = useState(1);
@@ -102,7 +102,7 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, column = false }
     async function load(initial: boolean) {
       if (initial) setLoading(true);
       try {
-        const next = await listChannelVideos({ channelId, groupId, page, search: query, sort });
+        const next = await listChannelVideos({ channelId, groupId, page, search: query, sort, breakoutOnly, startDate, endDate });
         if (cancelled) return;
         setData(next);
         setError("");
@@ -112,7 +112,7 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, column = false }
     }
     void load(true);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [channelId, groupId, page, query, sort, revision]);
+  }, [channelId, groupId, page, query, sort, revision, breakoutOnly, startDate, endDate]);
 
   async function sync() {
     if (!channelId) return;
@@ -125,7 +125,7 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, column = false }
 
   return <>
     {canEdit && channelId && <div className="flex justify-end px-3 pb-3">
-      <button onClick={sync} disabled={starting || running} title="Đồng bộ video" aria-label="Đồng bộ video" className={`${buttonClass} !h-9 !w-9 !p-0 !border-indigo-200 !bg-indigo-50 !text-indigo-600`}>
+      <button onClick={sync} disabled={starting || running} title={data?.sync?.error || "Đồng bộ video"} aria-label="Đồng bộ video" className={`${buttonClass} !h-9 !w-9 !p-0 !border-indigo-200 !bg-indigo-50 !text-indigo-600`}>
         <RefreshCw size={16} className={starting || running ? "animate-spin" : ""} />
       </button>
     </div>}
@@ -151,6 +151,9 @@ function VideoCard({ video, onSelect }: { video: Video; onSelect: () => void }) 
   return (<button onClick={onSelect} className="group flex h-full w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left transition hover:border-indigo-300 hover:shadow-md focus-visible:outline-indigo-500">
           <div className="relative aspect-video w-full shrink-0 bg-slate-100">
             {video.thumbnail ? <Image src={video.thumbnail} alt="" fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw" className="object-cover" /> : <Film className="absolute inset-0 m-auto text-slate-300" size={32} />}
+            {video.breakoutScore !== null && video.breakoutScore > 2 && <span title={`Điểm đột biến: ${video.breakoutScore}x`} aria-label={`Điểm đột biến ${video.breakoutScore}x`} className={`absolute bottom-2 left-2 rounded-md px-1.5 py-0.5 text-xs font-bold text-white shadow-sm ${video.breakoutScore >= 10 ? "bg-rose-600" : "bg-blue-600"}`}>
+              {new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(video.breakoutScore)}x
+            </span>}
             <span className="absolute bottom-2 right-2 rounded bg-slate-950/85 px-1.5 py-0.5 font-mono text-xs text-white">{duration(video.durationSeconds)}</span>
           </div>
           <div className="flex w-full items-start gap-2.5 p-3">
@@ -264,6 +267,13 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
   const [selected, setSelected] = useState(initialChannelId || channels[0]?.id || "");
   const [mode, setMode] = useState<"single" | "all" | "columns">("single");
   const [sort, setSort] = useState("newest");
+  const [breakoutOnly, setBreakoutOnly] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [datesOpen, setDatesOpen] = useState(false);
+  const datePanelId = useId();
+  const invalidDates = Boolean(startDate && endDate && startDate > endDate);
+  const filterKey = `${breakoutOnly}:${startDate}:${endDate}`;
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   useEffect(() => {
@@ -285,12 +295,25 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
   return <section id="video-library" className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5">
       <div><h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><Film size={19} className="text-indigo-500" />Thư viện video</h2></div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div role="group" aria-label="Lọc video" className="flex gap-1 rounded-xl bg-slate-100 p-1">
+          <button title="Video đột biến (điểm > 2)" aria-label="Video đột biến" aria-pressed={breakoutOnly} onClick={() => setBreakoutOnly(current => !current)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${breakoutOnly ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:text-blue-600"}`}><Zap size={19} /></button>
+          <button title="Lọc ngày đăng (GMT+7)" aria-label="Lọc ngày đăng" aria-expanded={datesOpen} aria-controls={datePanelId} onClick={() => setDatesOpen(current => !current)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${startDate || endDate ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-indigo-600"}`}><CalendarRange size={19} /></button>
+        </div>
       <div role="group" aria-label="Sắp xếp video" className="flex gap-1 rounded-xl bg-slate-100 p-1">
         {([
           ["newest", "Mới nhất", ArrowDownWideNarrow],
           ["oldest", "Cũ nhất", ArrowUpWideNarrow],
           ["views", "Phổ biến nhất (lượt xem)", ChartNoAxesColumnIncreasing],
         ] as const).map(([value, label, Icon]) => <button key={value} title={label} aria-label={label} aria-pressed={sort === value} onClick={() => setSort(value)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition focus-visible:outline-indigo-500 ${sort === value ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}><Icon size={19} aria-hidden="true" /></button>)}
+      </div>
+      </div>
+    </div>
+    <div id={datePanelId} hidden={!datesOpen} className="px-5 pb-4">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <label className="space-y-1 text-xs text-slate-600"><span className="block">Ngày đăng từ (GMT+7)</span><input type="date" aria-label="Ngày bắt đầu" value={startDate} max={endDate || undefined} onChange={event => setStartDate(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+        <label className="space-y-1 text-xs text-slate-600"><span className="block">Đến hết ngày (GMT+7)</span><input type="date" aria-label="Ngày kết thúc" value={endDate} min={startDate || undefined} onChange={event => setEndDate(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+        <button disabled={!startDate && !endDate} onClick={() => { setStartDate(""); setEndDate(""); }} className={buttonClass}>Xóa khoảng ngày</button>
       </div>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-4">
@@ -313,9 +336,10 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
         {search && <button onClick={() => setSearch("")} aria-label="Xóa tìm kiếm" title="Xóa tìm kiếm" className="absolute right-2 top-2 rounded-md p-1 text-slate-400 hover:bg-slate-100"><X size={16} /></button>}
       </div>
     </div>
-    {mode === "single" && <VideoBrowser key={`single:${channel.id}:${sort}:${query}`} channel={channel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} />}
-    {mode === "all" && groupId && <VideoBrowser key={`all:${groupId}:${sort}:${query}`} groupId={groupId} canEdit={canEdit} sort={sort} query={query} />}
-    {mode === "columns" && <>
+    {invalidDates && <p role="alert" className="px-5 pb-4 text-sm text-rose-600">Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.</p>}
+    {!invalidDates && mode === "single" && <VideoBrowser key={`single:${channel.id}:${sort}:${query}:${filterKey}`} channel={channel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} />}
+    {!invalidDates && mode === "all" && groupId && <VideoBrowser key={`all:${groupId}:${sort}:${query}:${filterKey}`} groupId={groupId} canEdit={canEdit} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} />}
+    {!invalidDates && mode === "columns" && <>
       {!visibleColumns.length && <p className="p-8 text-center text-sm text-slate-500">Chưa có cột nào. Bấm Thêm cột để chọn kênh.</p>}
       <div aria-label="Danh sách cột video" tabIndex={0} className="flex items-start gap-4 overflow-x-auto px-5 pb-5">
         {visibleColumns.map((column, index) => {
@@ -328,7 +352,7 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
               <button aria-label={`Xóa cột ${index + 1}`} onClick={() => setColumns(current => current.filter(item => item.id !== column.id))} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X size={16} /></button>
             </div>
             <div className="max-h-[75vh] overflow-y-auto">
-              <VideoBrowser key={`${column.channelId}:${sort}:${query}`} channel={columnChannel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} column />
+              <VideoBrowser key={`${column.channelId}:${sort}:${query}:${filterKey}`} channel={columnChannel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} column />
             </div>
           </section>;
         })}

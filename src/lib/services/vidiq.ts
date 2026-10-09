@@ -6,6 +6,30 @@ const VIDIQ_BEARER_TOKENS = [
   { value: process.env.VIDIQ_BEARER_TOKEN5, label: "VIDIQ_BEARER_TOKEN5" },
   { value: process.env.VIDIQ_BEARER_TOKEN6, label: "VIDIQ_BEARER_TOKEN6" },
 ];
+
+export async function getVidiqVideoMetrics(videoIds: string[]): Promise<unknown> {
+  if (!videoIds.length || videoIds.length > 30) throw new Error("Mỗi lần lấy điểm VidIQ cần từ 1 đến 30 video.");
+  const tokens = getAvailableVidiqTokens(getConfiguredVidiqTokens());
+  if (!tokens.length) throw new Error("Chưa có token VidIQ khả dụng để cập nhật điểm đột biến.");
+  for (const token of tokens) {
+    getTokenState(token.label).lastUsedAt = Date.now();
+    try {
+      const response = await fetch("https://api.vidiq.com/youtube/videos/metrics", {
+        method: "POST", cache: "no-store", signal: AbortSignal.timeout(15000),
+        headers: { accept: "application/json", "content-type": "application/json", authorization: `Bearer ${token.value}`, "x-vidiq-client": getVidiqClientHeader() },
+        body: JSON.stringify({ longVideos: videoIds, shortVideos: [] }),
+      });
+      if (!response.ok) throw new VidiqHttpError(token.label, response);
+      const payload: unknown = await response.json();
+      markTokenSuccess(token.label);
+      return payload;
+    } catch (error) {
+      markTokenFailure(token.label, error);
+      console.warn("[VidIQ metrics] Request failed", { token: token.label, status: error instanceof VidiqHttpError ? error.status : "network-or-response" });
+    }
+  }
+  throw new Error("Chưa lấy được điểm đột biến từ VidIQ. Điểm đã lưu được giữ nguyên; hãy thử đồng bộ lại sau.");
+}
 const VIDIQ_CLIENT_ID = process.env.VIDIQ_CLIENT_ID;
 const VIDIQ_MAX_TOKEN_ATTEMPTS = 2;
 const VIDIQ_RATE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;

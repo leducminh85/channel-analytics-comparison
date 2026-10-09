@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import prisma from "@/lib/prisma";
 import { fetchVideoPages } from "./youtubeVideos";
+import { getVidiqVideoMetrics } from "./vidiq";
+import { normalizeVideoMetrics } from "@/lib/videoFilters";
 
 export const SYNC_LEASE_MS = 120000;
 export const ACTIVE_SYNC_STATUSES = ["RUNNING"];
@@ -14,6 +16,7 @@ async function runSync(channelId: string, youtubeChannelId: string, runId: strin
   };
   try {
     let processed = 0;
+    let metricsError: string | null = null;
     for await (const videos of fetchVideoPages(youtubeChannelId)) {
       await heartbeat();
       await prisma.$transaction(videos.map(video => prisma.channelVideo.upsert({
@@ -21,9 +24,26 @@ async function runSync(channelId: string, youtubeChannelId: string, runId: strin
       })));
       processed += videos.length;
       await heartbeat({ processed });
+      // Metadata is saved first; a metrics outage must not discard video data.
+      if (!metricsError) {
+        for (let offset = 0; offset < videos.length; offset += 30) {
+          await heartbeat();
+          try {
+            const ids = videos.slice(offset, offset + 30).map(video => video.id);
+            const scores = normalizeVideoMetrics(await getVidiqVideoMetrics(ids), ids);
+            const metricsUpdatedAt = new Date();
+            await prisma.$transaction([...scores].map(([id, breakoutScore]) => prisma.channelVideo.updateMany({
+              where: { id, channelId }, data: { breakoutScore, metricsUpdatedAt },
+            })));
+          } catch (error) {
+            metricsError = error instanceof Error ? error.message : "Không thể cập nhật điểm đột biến.";
+            break;
+          }
+        }
+      }
     }
     await prisma.channelVideoSync.updateMany({ where, data: {
-      status: "COMPLETED", completedAt: new Date(), heartbeatAt: new Date(), error: null,
+      status: metricsError ? "FAILED" : "COMPLETED", completedAt: new Date(), heartbeatAt: new Date(), error: metricsError,
     } });
   } catch (error) {
     console.error("[VideoSync]", channelId, error instanceof Error ? error.message : "Sync failed");

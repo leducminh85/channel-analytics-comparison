@@ -129,6 +129,8 @@ model ChannelVideo {
   thumbnail        String?
   description      String   @default("")
   durationSeconds  Int?
+  breakoutScore    Float?
+  metricsUpdatedAt DateTime?
   viewCount        BigInt   @default(0)
   publishedAt      DateTime?
   hasCaption       Boolean  @default(false)

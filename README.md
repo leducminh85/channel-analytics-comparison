@@ -38,6 +38,13 @@ This project is built for teams that need to:
 
 ## Video library setup
 
+Video sync also retrieves VidIQ `breakout_score` in batches of up to 30 using the existing
+`VIDIQ_BEARER_TOKEN` pool. Badges appear only above 2 (blue below 10, red from 10).
+The lightning filter keeps scores above 2; the calendar filters publication dates in GMT+7,
+including the entire end date. Both filters combine with search and the existing sort in all views.
+Resync existing channels to populate scores. A null score means VidIQ has no score available;
+failed requests preserve stored scores and can be retried with the sync icon (its tooltip shows the error).
+
 Run `npx prisma migrate deploy` and `npx prisma generate`, then restart the dev server.
 Metadata uses the existing `YOUTUBE_API_KEY`; no Python worker is required.
 
