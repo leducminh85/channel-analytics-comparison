@@ -300,7 +300,50 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [datesOpen, setDatesOpen] = useState(false);
+  const [datePreset, setDatePreset] = useState<number | null>(null);
   const datePanelId = useId();
+  const datePopupRef = useRef<HTMLDivElement>(null);
+  const dateButtonRef = useRef<HTMLButtonElement>(null);
+  function positionDatePopup() {
+    const popup = datePopupRef.current;
+    const button = dateButtonRef.current;
+    if (!popup || !button) return;
+    const rect = button.getBoundingClientRect();
+    const below = rect.bottom + 8;
+    const top = below + popup.offsetHeight <= window.innerHeight - 8 ? below : rect.top - popup.offsetHeight - 8;
+    popup.style.left = `${Math.max(8, Math.min(rect.right - popup.offsetWidth, window.innerWidth - popup.offsetWidth - 8))}px`;
+    popup.style.top = `${Math.max(8, top)}px`;
+  }
+  function closeDatePopup() {
+    datePopupRef.current?.hidePopover();
+    dateButtonRef.current?.focus({ preventScroll: true });
+  }
+  function toggleDatePopup() {
+    const popup = datePopupRef.current;
+    if (!popup) return;
+    if (popup.matches(":popover-open")) { closeDatePopup(); return; }
+    popup.showPopover();
+    positionDatePopup();
+  }
+  useEffect(() => {
+    if (!datesOpen) return;
+    window.addEventListener("resize", positionDatePopup);
+    window.addEventListener("scroll", positionDatePopup, true);
+    return () => {
+      window.removeEventListener("resize", positionDatePopup);
+      window.removeEventListener("scroll", positionDatePopup, true);
+    };
+  }, [datesOpen]);
+  function selectRecentMonths(months: number, now: number) {
+    const today = new Date(now + 7 * 60 * 60 * 1000);
+    const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - months, 1));
+    const lastDay = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+    start.setUTCDate(Math.min(today.getUTCDate(), lastDay));
+    setStartDate(start.toISOString().slice(0, 10));
+    setEndDate(today.toISOString().slice(0, 10));
+    setDatePreset(months);
+    closeDatePopup();
+  }
   const invalidDates = Boolean(startDate && endDate && startDate > endDate);
   const filterKey = `${breakoutOnly}:${startDate}:${endDate}`;
   const [search, setSearch] = useState("");
@@ -330,7 +373,7 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
             setBreakoutOnly(!breakoutOnly);
             if (breakoutOnly && sort === "breakout") setSort("newest");
           }} className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${breakoutOnly ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:text-blue-600"}`}><Zap size={19} /></button>
-          <button title="Lọc ngày đăng (GMT+7)" aria-label="Lọc ngày đăng" aria-expanded={datesOpen} aria-controls={datePanelId} onClick={() => setDatesOpen(current => !current)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${startDate || endDate ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-indigo-600"}`}><CalendarRange size={19} /></button>
+          <button title={startDate || endDate ? `Ngày đăng: ${startDate || "Không giới hạn"} → ${endDate || "Không giới hạn"} (GMT+7)` : "Lọc ngày đăng (GMT+7)"} aria-label="Lọc ngày đăng" aria-expanded={datesOpen} aria-controls={datePanelId} aria-haspopup="dialog" ref={dateButtonRef} onClick={toggleDatePopup} className={`flex h-10 w-10 items-center justify-center rounded-lg transition ${startDate || endDate ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-indigo-600"}`}><CalendarRange size={19} /></button>
         </div>
       <div role="group" aria-label="Sắp xếp video" className="flex gap-1 rounded-xl bg-slate-100 p-1">
         {([
@@ -342,11 +385,24 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
       </div>
       </div>
     </div>
-    <div id={datePanelId} hidden={!datesOpen} className="px-5 pb-4">
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <label className="space-y-1 text-xs text-slate-600"><span className="block">Ngày đăng từ (GMT+7)</span><input type="date" aria-label="Ngày bắt đầu" value={startDate} max={endDate || undefined} onChange={event => setStartDate(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
-        <label className="space-y-1 text-xs text-slate-600"><span className="block">Đến hết ngày (GMT+7)</span><input type="date" aria-label="Ngày kết thúc" value={endDate} min={startDate || undefined} onChange={event => setEndDate(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
-        <button disabled={!startDate && !endDate} onClick={() => { setStartDate(""); setEndDate(""); }} className={buttonClass}>Xóa khoảng ngày</button>
+    <div id={datePanelId} ref={datePopupRef} popover="auto" role="dialog" aria-label="Lọc ngày đăng video"
+      onToggle={event => setDatesOpen(event.newState === "open")}
+      className="fixed inset-auto m-0 w-80 max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-slate-800 shadow-xl">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Lọc ngày đăng <span className="font-normal text-slate-400">(GMT+7)</span></h3>
+        <button aria-label="Đóng bộ lọc ngày" onClick={closeDatePopup} className="rounded-md p-1 text-slate-500 hover:bg-slate-100"><X size={16} /></button>
+      </div>
+      <p className="mb-2 text-xs font-medium text-slate-500">Gần nhất</p>
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        {[1, 3].map(months => <button key={months} title={`${months} tháng gần nhất`} aria-pressed={datePreset === months} onClick={() => selectRecentMonths(months, Date.now())} className={`flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-indigo-500 ${datePreset === months ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"}`}>
+          {datePreset === months && <Check size={14} aria-hidden="true" />}{months} tháng
+        </button>)}
+      </div>
+      <div className="space-y-3 border-t border-slate-100 pt-3">
+        <label className="block space-y-1 text-xs text-slate-600"><span className="block">Từ ngày</span><input type="date" aria-label="Ngày bắt đầu" value={startDate} max={endDate || undefined} onChange={event => { setStartDate(event.target.value); setDatePreset(null); }} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+        <label className="block space-y-1 text-xs text-slate-600"><span className="block">Đến ngày</span><input type="date" aria-label="Ngày kết thúc" value={endDate} min={startDate || undefined} onChange={event => { setEndDate(event.target.value); setDatePreset(null); }} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+        {invalidDates && <p role="alert" className="text-xs text-rose-600">Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.</p>}
+        <button disabled={!startDate && !endDate} onClick={() => { setStartDate(""); setEndDate(""); setDatePreset(null); }} className={`${buttonClass} w-full`}>Xóa lọc</button>
       </div>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-4">
