@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, CalendarRange, TrendingUp, Zap, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChartNoAxesColumnIncreasing, CalendarRange, Maximize, Minimize, Eye, EyeOff, TrendingUp, Zap, Check, ChevronDown, ChevronLeft, ChevronRight, Columns3, Grid2X2, Square, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { getVideoDetails, listChannelVideos, startVideoSync } from "@/app/actions/videoActions";
 
 type LibraryData = Awaited<ReturnType<typeof listChannelVideos>>;
@@ -85,11 +85,12 @@ function VideoDetail({ video, channelId, groupId, onClose }: {
   );
 }
 
-function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, startDate, endDate, column = false }: { channel?: LibraryChannel; groupId?: string; canEdit: boolean; sort: string; query: string; breakoutOnly: boolean; startDate: string; endDate: string; column?: boolean }) {
+function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, startDate, endDate, infinite = false, column = false }: { channel?: LibraryChannel; groupId?: string; canEdit: boolean; sort: string; query: string; breakoutOnly: boolean; startDate: string; endDate: string; infinite?: boolean; column?: boolean }) {
   const channelId = channel?.id;
   const browserRef = useRef<HTMLDivElement>(null);
   const measuredPageSize = useRef<number | null>(null);
-  const [pageSize, setPageSize] = useState<number | null>(null);
+  const [pageSize, setPageSize] = useState<number | null>(infinite ? 24 : null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<LibraryData | null>(null);
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
@@ -104,7 +105,7 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, st
 
   useEffect(() => {
     const element = browserRef.current;
-    if (!element) return;
+    if (!element || infinite) return;
     let timer: ReturnType<typeof setTimeout>;
     const observer = new ResizeObserver(() => {
       clearTimeout(timer);
@@ -122,7 +123,7 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, st
     });
     observer.observe(element);
     return () => { clearTimeout(timer); observer.disconnect(); };
-  }, [column]);
+  }, [column, infinite]);
 
   useEffect(() => {
     if (pageSize === null) return;
@@ -133,7 +134,11 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, st
       try {
         const next = await listChannelVideos({ channelId, groupId, page, pageSize: pageSize ?? 12, search: query, sort, breakoutOnly, startDate, endDate });
         if (cancelled) return;
-        setData(next);
+        setData(current => {
+          if (!infinite || page === 1 || !current) return next;
+          const videos = [...current.videos.slice(0, (page - 1) * (pageSize ?? 24)), ...next.videos];
+          return { ...next, videos: [...new Map(videos.map(video => [video.id, video])).values()] };
+        });
         setError("");
         if (next.isSyncing) timer = setTimeout(() => load(false), 4000);
       } catch (error) { if (!cancelled) setError(message(error)); }
@@ -141,35 +146,52 @@ function VideoBrowser({ channel, groupId, canEdit, sort, query, breakoutOnly, st
     }
     void load(true);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [channelId, groupId, page, pageSize, query, sort, revision, breakoutOnly, startDate, endDate]);
+  }, [channelId, groupId, page, pageSize, query, sort, revision, breakoutOnly, startDate, endDate, infinite]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!infinite || !sentinel || loading || error || !data || data.page >= data.pages) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        observer.disconnect();
+        setLoading(true);
+        setPage(data.page + 1);
+      }
+    }, { root: column ? browserRef.current?.parentElement : browserRef.current, rootMargin: "240px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [infinite, loading, error, data, column]);
 
   async function sync() {
     if (!channelId) return;
     setStarting(true);
     setError("");
-    try { await startVideoSync(channelId, groupId); setRevision(value => value + 1); }
+    try { await startVideoSync(channelId, groupId); if (infinite) { setPage(1); setData(null); } setRevision(value => value + 1); }
     catch (error) { setError(message(error)); }
     finally { setStarting(false); }
   }
 
-  return <div ref={browserRef} className="min-w-0">
+  return <div ref={browserRef} className={infinite && !column ? "min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain" : "min-w-0"}>
     {canEdit && channelId && <div className="flex justify-end px-3 pb-3">
       <button onClick={sync} disabled={starting || running} title={data?.sync?.error || "Đồng bộ video"} aria-label="Đồng bộ video" className={`${buttonClass} !h-9 !w-9 !p-0 !border-indigo-200 !bg-indigo-50 !text-indigo-600`}>
         <RefreshCw size={16} className={starting || running ? "animate-spin" : ""} />
       </button>
     </div>}
     {error && <div role="alert" className="mx-5 mb-4 flex items-center justify-between rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}<button onClick={() => setRevision(value => value + 1)} className="ml-3 underline">Tải lại</button></div>}
-    {loading ? <div className={gridClass}>{[0, 1, 2].map(item => <div key={item} className="h-64 animate-pulse rounded-xl bg-slate-100" />)}</div>
+    {loading && (!infinite || !data) ? <div className={gridClass}>{[0, 1, 2].map(item => <div key={item} className="h-64 animate-pulse rounded-xl bg-slate-100" />)}</div>
       : data?.videos.length ? <div className={gridClass}>
         {data.videos.map(video => <VideoCard key={video.id} video={video} onSelect={() => setSelected(video)} />)}
       </div> : <div className="px-5 py-12 text-center">
         <Film size={32} className="mx-auto mb-3 text-slate-300" />
-        <p className="text-sm font-medium text-slate-600">{query ? "Không có video khớp từ khóa." : running ? "Đang tải những video đầu tiên…" : (channelId ? "Chưa có video được lưu cho kênh này." : "Chưa có video được lưu trong nhóm.")}</p>
-        {!query && !running && <p className="mt-2 text-xs text-slate-400">{canEdit ? (channelId ? "Bấm biểu tượng đồng bộ để lấy video." : "Chọn chế độ Một kênh để đồng bộ video của từng kênh.") : "Chủ nhóm hoặc người chỉnh sửa có thể đồng bộ video."}</p>}
+        <p className="text-sm font-medium text-slate-600">{query || breakoutOnly || startDate || endDate ? "Không có video phù hợp với bộ lọc." : running ? "Đang tải những video đầu tiên…" : (channelId ? "Chưa có video được lưu cho kênh này." : "Chưa có video được lưu trong nhóm.")}</p>
+        {!query && !breakoutOnly && !startDate && !endDate && !running && <p className="mt-2 text-xs text-slate-400">{canEdit ? (channelId ? "Bấm biểu tượng đồng bộ để lấy video." : "Chọn chế độ Một kênh để đồng bộ video của từng kênh.") : "Chủ nhóm hoặc người chỉnh sửa có thể đồng bộ video."}</p>}
       </div>}
-    {data && data.total > 0 && <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-sm text-slate-500">
+    {!infinite && data && data.total > 0 && <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-sm text-slate-500">
       <span>{data.total.toLocaleString("vi-VN")} kết quả · Trang {data.page}/{data.pages}</span>
       <div className="flex gap-2"><button aria-label="Trang trước" disabled={loading || data.page <= 1} onClick={() => setPage(data.page - 1)} className={buttonClass}><ChevronLeft size={16} /></button><button aria-label="Trang sau" disabled={loading || data.page >= data.pages} onClick={() => setPage(data.page + 1)} className={buttonClass}><ChevronRight size={16} /></button></div>
+    </div>}
+    {infinite && <div ref={sentinelRef} role="status" className={loading ? "flex items-center justify-center gap-2 px-5 py-4 text-sm text-slate-500" : "h-px"}>
+      {loading && <><Loader2 size={16} className="animate-spin" />Đang tải…</>}
     </div>}
     {selected && <VideoDetail key={selected.id} video={selected} channelId={selected.channelId} groupId={groupId} onClose={() => { setSelected(null); setRevision(value => value + 1); }} />}
   </div>;
@@ -293,6 +315,30 @@ function AddColumnsModal({ channels, onAdd, onClose }: { channels: LibraryChanne
 export default function ChannelVideoLibrary({ channels, groupId, canEdit = false, initialChannelId }: {
   channels: LibraryChannel[]; groupId?: string; canEdit?: boolean; initialChannelId?: string;
 }) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
+  const [collapsed, setCollapsed] = useState(true);
+  const expandedDialogRef = useRef<HTMLDialogElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const libraryBodyId = useId();
+  function toggleFullscreen() {
+    setCollapsed(false);
+    setFullscreen(value => !value);
+  }
+  useEffect(() => {
+    if (!fullscreen) {
+      const frame = requestAnimationFrame(() => fullscreenButtonRef.current?.focus({ preventScroll: true }));
+      return () => cancelAnimationFrame(frame);
+    }
+    const dialog = expandedDialogRef.current;
+    const previousOverflow = document.body.style.overflow;
+    dialog?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      dialog?.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [fullscreen]);
   const [selected, setSelected] = useState(initialChannelId || channels[0]?.id || "");
   const [mode, setMode] = useState<"single" | "all" | "columns">("single");
   const [sort, setSort] = useState("newest");
@@ -345,7 +391,7 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
     closeDatePopup();
   }
   const invalidDates = Boolean(startDate && endDate && startDate > endDate);
-  const filterKey = `${breakoutOnly}:${startDate}:${endDate}`;
+  const filterKey = `${breakoutOnly}:${startDate}:${endDate}:${fullscreen}`;
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   useEffect(() => {
@@ -364,10 +410,11 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
     setAddingColumns(false);
   }
   if (!channel) return null;
-  return <section id="video-library" className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5">
-      <div><h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><Film size={19} className="text-indigo-500" />Thư viện video</h2></div>
+  const content = <section ref={sectionRef} id="video-library" className={fullscreen ? "flex h-full flex-col overflow-hidden bg-white" : "scroll-mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm"}>
+    <div className={`flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 py-4 ${fullscreen ? "sticky top-0 z-20 border-b border-slate-100 bg-white" : ""}`}>
+      <h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><Film size={19} className="text-indigo-500" />Thư viện video</h2>
       <div className="flex flex-wrap items-center gap-2">
+        {!collapsed && <>
         <div role="group" aria-label="Lọc video" className="flex gap-1 rounded-xl bg-slate-100 p-1">
           <button title="Video đột biến (điểm > 2)" aria-label="Video đột biến" aria-pressed={breakoutOnly} onClick={() => {
             setBreakoutOnly(!breakoutOnly);
@@ -383,8 +430,12 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
           ["breakout", "Điểm đột biến cao nhất", TrendingUp],
         ] as const).filter(([value]) => value !== "breakout" || breakoutOnly).map(([value, label, Icon]) => <button key={value} title={label} aria-label={label} aria-pressed={sort === value} onClick={() => setSort(value)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition focus-visible:outline-indigo-500 ${sort === value ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}><Icon size={19} aria-hidden="true" /></button>)}
       </div>
+        <button ref={fullscreenButtonRef} aria-label={fullscreen ? "Thu nhỏ thư viện" : "Mở rộng thư viện"} title={fullscreen ? "Thu nhỏ" : "Mở rộng"} onClick={() => { datePopupRef.current?.hidePopover(); toggleFullscreen(); }} className={`${buttonClass} !h-9 !w-9 !p-0`}>{fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}</button>
+        </>}
+        <button aria-label={collapsed ? "Hiện thư viện video" : "Ẩn thư viện video"} title={collapsed ? "Hiện thư viện" : "Ẩn thư viện"} aria-expanded={!collapsed} aria-controls={libraryBodyId} onClick={() => { datePopupRef.current?.hidePopover(); if (fullscreen) setFullscreen(false); setCollapsed(value => !value); }} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">{collapsed ? <Eye size={16} /> : <EyeOff size={16} />}</button>
       </div>
     </div>
+    {!collapsed && <div id={libraryBodyId} className={fullscreen ? "flex min-h-0 flex-1 flex-col" : undefined}>
     <div id={datePanelId} ref={datePopupRef} popover="auto" role="dialog" aria-label="Lọc ngày đăng video"
       onToggle={event => setDatesOpen(event.newState === "open")}
       className="fixed inset-auto m-0 w-80 max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-slate-800 shadow-xl">
@@ -405,7 +456,7 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
         <button disabled={!startDate && !endDate} onClick={() => { setStartDate(""); setEndDate(""); setDatePreset(null); }} className={`${buttonClass} w-full`}>Xóa lọc</button>
       </div>
     </div>
-    <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-4">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 pb-4">
       {groupId && <div role="group" aria-label="Chế độ xem video" className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
         {([["single", "Một kênh", Square], ["all", "Tất cả kênh", Grid2X2], ["columns", "Theo cột", Columns3]] as const).map(([value, label, Icon]) =>
           <button key={value} title={label} aria-label={label} aria-pressed={mode === value} onClick={() => setMode(value)} className={`flex h-10 w-10 items-center justify-center rounded-lg transition focus-visible:outline-indigo-500 ${mode === value ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}><Icon size={19} aria-hidden="true" /></button>
@@ -418,7 +469,7 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
         else setAddingColumns(true);
       }} className={buttonClass}><Plus size={15} />Thêm cột</button>}
     </div>
-    <div className="px-5 pb-4">
+    <div className="shrink-0 px-5 pb-4">
       <div className="relative">
         <Search size={16} className="absolute left-3 top-3 text-slate-400" />
         <input value={search} onChange={event => setSearch(event.target.value)} aria-label="Tìm tiêu đề video" placeholder="Tìm tiêu đề video..." className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-10 text-sm outline-none focus:border-indigo-400" />
@@ -426,27 +477,33 @@ export default function ChannelVideoLibrary({ channels, groupId, canEdit = false
       </div>
     </div>
     {invalidDates && <p role="alert" className="px-5 pb-4 text-sm text-rose-600">Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.</p>}
-    {!invalidDates && mode === "single" && <VideoBrowser key={`single:${channel.id}:${sort}:${query}:${filterKey}`} channel={channel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} />}
-    {!invalidDates && mode === "all" && groupId && <VideoBrowser key={`all:${groupId}:${sort}:${query}:${filterKey}`} groupId={groupId} canEdit={canEdit} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} />}
+    {!invalidDates && mode === "single" && <VideoBrowser key={`single:${channel.id}:${sort}:${query}:${filterKey}`} channel={channel} groupId={groupId} canEdit={canEdit} infinite={fullscreen} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} />}
+    {!invalidDates && mode === "all" && groupId && <VideoBrowser key={`all:${groupId}:${sort}:${query}:${filterKey}`} groupId={groupId} canEdit={canEdit} infinite={fullscreen} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} />}
     {!invalidDates && mode === "columns" && <>
       {!visibleColumns.length && <p className="p-8 text-center text-sm text-slate-500">Chưa có cột nào. Bấm Thêm cột để chọn kênh.</p>}
-      <div aria-label="Danh sách cột video" tabIndex={0} className="flex items-start gap-4 overflow-x-auto px-5 pb-5">
+      <div aria-label="Danh sách cột video" tabIndex={0} className={`flex gap-4 overflow-x-auto px-5 pb-5 ${fullscreen ? "min-h-0 flex-1 items-stretch" : "items-start"}`}>
         {visibleColumns.map((column, index) => {
           const columnChannel = channels.find(channel => channel.id === column.channelId)!;
-          return <section key={column.id} aria-label={`Cột ${index + 1}`} className="@container min-w-[min(340px,calc(100vw-4rem))] flex-1 basis-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/40">
-            <div className="flex items-center gap-2 p-3">
+          return <section key={column.id} aria-label={`Cột ${index + 1}`} className={`@container min-w-[min(340px,calc(100vw-4rem))] flex-1 basis-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/40 ${fullscreen ? "flex min-h-0 flex-col" : ""}`}>
+            <div className="flex shrink-0 items-center gap-2 p-3">
               <ChannelPicker label={`Kênh cột ${index + 1}`} selected={columnChannel}
                 channels={channels.filter(channel => channel.id === column.channelId || !visibleColumns.some(item => item.channelId === channel.id))}
                 onSelect={id => setColumns(current => current.map(item => item.id === column.id ? { ...item, channelId: id } : item))} />
               <button aria-label={`Xóa cột ${index + 1}`} onClick={() => setColumns(current => current.filter(item => item.id !== column.id))} className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X size={16} /></button>
             </div>
-            <div className="max-h-[75vh] overflow-y-auto">
-              <VideoBrowser key={`${column.channelId}:${sort}:${query}:${filterKey}`} channel={columnChannel} groupId={groupId} canEdit={canEdit} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} column />
+            <div className={fullscreen ? "min-h-0 flex-1 overflow-y-auto overscroll-contain" : "max-h-[75vh] overflow-y-auto"}>
+              <VideoBrowser key={`${column.channelId}:${sort}:${query}:${filterKey}`} channel={columnChannel} groupId={groupId} canEdit={canEdit} infinite={fullscreen} sort={sort} query={query} breakoutOnly={breakoutOnly} startDate={startDate} endDate={endDate} column />
             </div>
           </section>;
         })}
       </div>
     </>}
     {addingColumns && <AddColumnsModal channels={availableChannels} onAdd={addColumns} onClose={() => setAddingColumns(false)} />}
+    </div>}
   </section>;
+  return fullscreen ? <dialog ref={expandedDialogRef} aria-label="Thư viện video mở rộng"
+    onCancel={event => { if (event.target === event.currentTarget) { event.preventDefault(); setFullscreen(false); } }}
+    className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none border-0 bg-white p-0 backdrop:bg-slate-950/40">
+    {content}
+  </dialog> : content;
 }
